@@ -1,0 +1,32 @@
+Options -MultiViews -Indexes
+DirectoryIndex app.js
+
+# Security headers
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+RewriteEngine On
+
+# Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Serve static Next.js assets directly (performance)
+RewriteCond %{REQUEST_URI} ^/_next/static/
+RewriteRule ^ - [L]
+
+# Skip proxy for existing static files
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Proxy everything else to Node.js
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L,QSA]
+ProxyPassReverse / http://127.0.0.1:3000/
+
+# Large uploads for video/audio
+php_value upload_max_filesize 512M
+php_value post_max_size 512M

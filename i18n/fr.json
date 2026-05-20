@@ -1,0 +1,126 @@
+{
+  "nav": {
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "dashboard": "Studio",
+    "login": "Connexion",
+    "start": "Commencer gratuitement"
+  },
+  "hero": {
+    "badge": "IA 100% Open-Source & Locale",
+    "title": "Créez du Contenu Viral",
+    "titleAccent": "en Quelques Clics",
+    "subtitle": "Générez scripts, voix-off clonées, musique IA et vidéos montées automatiquement — prêts à publier sur YouTube, TikTok, Instagram, Facebook et X.",
+    "cta": "Lancer mon Studio IA",
+    "ctaSecondary": "Voir la démo",
+    "stats": [
+      { "value": "10x", "label": "Plus rapide" },
+      { "value": "100%", "label": "Open-Source" },
+      { "value": "5", "label": "Plateformes" }
+    ]
+  },
+  "features": {
+    "title": "Tout ce dont vous avez besoin",
+    "subtitle": "Une seule plateforme pour créer, voix-offer, musicer et diffuser.",
+    "items": [
+      {
+        "icon": "✍️",
+        "title": "Script IA",
+        "desc": "Mistral / Llama 3 génère vos scripts optimisés SEO en FR/EN selon votre niche et vos mots-clés."
+      },
+      {
+        "icon": "🎙️",
+        "title": "Clonage de Voix",
+        "desc": "Coqui XTTS v2 clone n'importe quelle voix depuis un sample .wav de 6 secondes, sans GPU externe."
+      },
+      {
+        "icon": "🎵",
+        "title": "Musique Générée",
+        "desc": "Meta MusicGen crée des jingles et musiques de fond selon l'ambiance et les BPM que vous dictez."
+      },
+      {
+        "icon": "🎬",
+        "title": "Montage Automatique",
+        "desc": "FFmpeg assemble voix, musique, clips et sous-titres mot-par-mot en un rendu final prêt à poster."
+      },
+      {
+        "icon": "📡",
+        "title": "Publication Simultanée",
+        "desc": "Un clic pour publier sur YouTube Shorts, TikTok, Reels, Facebook et X en même temps."
+      },
+      {
+        "icon": "⚡",
+        "title": "File d'Attente",
+        "desc": "Un cron job traite vos rendus et publications en arrière-plan pendant que vous créez la suite."
+      }
+    ]
+  },
+  "pricing": {
+    "title": "Tarifs simples et transparents",
+    "subtitle": "Payez en FCFA, USD, ou mobile money. Annulez quand vous voulez.",
+    "monthly": "Mensuel",
+    "yearly": "Annuel  (-20%)",
+    "popular": "Le plus populaire",
+    "cta": "Choisir ce plan",
+    "plans": [
+      {
+        "name": "Starter",
+        "priceXOF": "9 900",
+        "priceUSD": "15",
+        "period": "/ mois",
+        "desc": "Pour les créateurs qui démarrent",
+        "features": [
+          "10 vidéos / mois",
+          "Scripts en FR & EN",
+          "Voix-off clonée",
+          "Musique IA incluse",
+          "Publication sur 2 plateformes",
+          "Support par email"
+        ]
+      },
+      {
+        "name": "Creator",
+        "priceXOF": "24 900",
+        "priceUSD": "39",
+        "period": "/ mois",
+        "desc": "Pour les créateurs professionnels",
+        "popular": true,
+        "features": [
+          "50 vidéos / mois",
+          "Scripts optimisés SEO",
+          "Clonage voix illimité",
+          "Musique personnalisée",
+          "Publication sur 5 plateformes",
+          "Sous-titres automatiques",
+          "Support prioritaire"
+        ]
+      },
+      {
+        "name": "Studio",
+        "priceXOF": "49 900",
+        "priceUSD": "79",
+        "period": "/ mois",
+        "desc": "Pour les agences et équipes",
+        "features": [
+          "Vidéos illimitées",
+          "Multi-comptes sociaux",
+          "API access complet",
+          "Bibliothèque clips privée",
+          "Analytics avancés",
+          "SLA 99.9%",
+          "Support dédié 24/7"
+        ]
+      }
+    ],
+    "payment_methods": "Visa • MasterCard • PayPal • Orange Money • Airtel Money • M-Pesa"
+  },
+  "footer": {
+    "tagline": "Synthia AI — L'IA au service de votre créativité.",
+    "links": {
+      "legal": "Mentions légales",
+      "privacy": "Confidentialité",
+      "terms": "CGU",
+      "contact": "Contact"
+    }
+  }
+}

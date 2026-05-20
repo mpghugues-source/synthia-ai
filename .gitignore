@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment variables (contains API keys)
+.env.local
+.env.*.local
+
+# Runtime data
+data/queue.json
+data/.queue.lock
+
+# Generated media (uploads/renders)
+uploads/
+output/
+voice-samples/
+stock/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp screenshot scripts
+screenshot_*_tmp.cjs
+scroll_capture.js
