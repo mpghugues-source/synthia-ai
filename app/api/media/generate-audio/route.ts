@@ -54,18 +54,15 @@ export async function POST(req: NextRequest) {
       voicePath
     );
 
-    // 3 — Generate background music with MusicGen
-    const musicPath = await generateMusic({
-      mood: mood as MusicMood,
-      bpm,
-      duration,
-      outputDir,
-      jobId,
-    });
+    // 3 — Queue MusicGen in background (CPU inference takes several minutes)
+    const musicPath = path.join(outputDir, `music_${jobId}.mp3`);
+    generateMusic({ mood: mood as MusicMood, bpm, duration, outputDir, jobId })
+      .then(() => console.log(`[generate-audio] music ready: ${musicPath}`))
+      .catch((e: unknown) => console.error('[generate-audio] musicgen failed:', e));
 
     const result = { jobId, title, script, hashtags, voicePath, musicPath };
 
-    // 4 — Optionally queue the video render job
+    // 4 — Optionally queue the video render job (music may still be generating)
     if (autoRender) {
       enqueue('render_video', {
         jobId,

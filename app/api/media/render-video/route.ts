@@ -46,9 +46,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Sync mode: render immediately (blocks until done)
+    const resolvedMusicPath = musicPath && fs.existsSync(musicPath) ? musicPath : undefined;
     const finalPath = await renderVideo({
       voiceoverPath: voicePath,
-      musicPath: musicPath ?? undefined,
+      musicPath: resolvedMusicPath,
       stockClipsDir: stockDir,
       outputPath,
       subtitleText: script,

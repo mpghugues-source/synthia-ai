@@ -28,7 +28,7 @@ export async function generateText(prompt: string, opts: OllamaOptions = {}): Pr
       stream: false,
       options: { temperature, num_predict },
     },
-    { timeout: 120_000 }
+    { timeout: 600_000 }
   );
 
   return response.data.response as string;
@@ -43,24 +43,15 @@ export async function generateScript(params: {
 }): Promise<{ script: string; title: string; hashtags: string[] }> {
   const { topic, niche, duration, platform, lang } = params;
 
+  const words = Math.round(duration * 2.5); // ~2.5 words/sec for voiceover
   const prompt =
     lang === 'fr'
-      ? `Génère un script ${platform} de ${duration} secondes sur le sujet "${topic}" dans la niche "${niche}".
-Format de réponse JSON strict :
-{
-  "title": "titre accrocheur de 60 caractères max",
-  "script": "script complet narré, optimisé pour la voix-off",
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3", "hashtag4", "hashtag5"]
-}`
-      : `Generate a ${duration}-second ${platform} script on the topic "${topic}" in the "${niche}" niche.
-Strict JSON response format:
-{
-  "title": "catchy title max 60 chars",
-  "script": "full narrated script, optimized for voiceover",
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3", "hashtag4", "hashtag5"]
-}`;
+      ? `JSON uniquement. Script ${platform} sur "${topic}". ${words} mots max. Format exact:
+{"title":"titre court","script":"texte narré ${words} mots","hashtags":["#tag1","#tag2","#tag3"]}`
+      : `JSON only. ${platform} script about "${topic}". Max ${words} words. Exact format:
+{"title":"short title","script":"narrated text ${words} words","hashtags":["#tag1","#tag2","#tag3"]}`;
 
-  const raw = await generateText(prompt, { lang, temperature: 0.8, num_predict: 1500 });
+  const raw = await generateText(prompt, { lang, temperature: 0.7, num_predict: 250 });
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Ollama returned non-JSON response');

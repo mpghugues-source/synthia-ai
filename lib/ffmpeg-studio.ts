@@ -146,16 +146,34 @@ export function renderVideo(opts: RenderOptions): Promise<string> {
       });
     }
 
+    const hasMusic = Boolean(musicPath && fs.existsSync(musicPath));
     const voiceInput = clips.length > 0 ? clips.length : 1;
-    const musicInput = musicPath ? voiceInput + 1 : null;
+    const musicInput = hasMusic ? voiceInput + 1 : null;
 
-    // Audio mix
-    let audioFilter = '';
+    // Determine video output label
+    const hasSubtitles = Boolean(subtitleText && fs.existsSync(srtPath));
+    const videoOutLabel = videoFilter.length > 0 ? (hasSubtitles ? '[vout]' : '[vconcat]') : null;
+    // If no video filter at all (no clips, no subtitles), use raw input stream
+    const videoMapArg = videoOutLabel ?? '0:v';
+
+    // Audio: mix voice + music, or just voice
+    let audioMapArg: string;
+    const allFilters: (ffmpeg.FilterSpecification | string)[] = [...videoFilter];
+
     if (musicInput !== null) {
-      audioFilter = `[${voiceInput}:a]volume=1.0[voice];[${musicInput}:a]volume=${musicVolume}[music];[voice][music]amix=inputs=2:duration=first[aout]`;
+      allFilters.push(
+        `[${voiceInput}:a]volume=1.0[voice]`,
+        `[${musicInput}:a]volume=${musicVolume}[music]`,
+        '[voice][music]amix=inputs=2:duration=first[aout]'
+      );
+      audioMapArg = '[aout]';
+    } else {
+      audioMapArg = `${voiceInput}:a`;
     }
 
     const outputOptions = [
+      '-map', videoMapArg,
+      '-map', audioMapArg,
       '-t', String(duration),
       '-c:v', 'libx264',
       '-preset', 'fast',
@@ -167,8 +185,7 @@ export function renderVideo(opts: RenderOptions): Promise<string> {
       '-r', '30',
     ];
 
-    if (videoFilter.length > 0) cmd.complexFilter(videoFilter);
-    if (audioFilter) cmd.complexFilter(audioFilter);
+    if (allFilters.length > 0) cmd.complexFilter(allFilters as ffmpeg.FilterSpecification[]);
 
     cmd
       .outputOptions(outputOptions)
