@@ -1,27 +1,50 @@
 /** @type {import('next').NextConfig} */
+
+// Content-Security-Policy: only our own origin, plus Flutterwave's checkout for payments.
+// 'unsafe-inline' scripts are required by Next.js' inline bootstrap without per-request nonces.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://checkout.flutterwave.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "media-src 'self' blob:",
+  "connect-src 'self' https://api.flutterwave.com",
+  "frame-src https://checkout.flutterwave.com https://*.flutterwave.com",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  'upgrade-insecure-requests',
+].join('; ');
+
+const SECURITY_HEADERS = [
+  { key: 'Content-Security-Policy', value: CSP },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), usb=(), payment=(self "https://checkout.flutterwave.com")' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+];
+
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
+  poweredByHeader: false,
   // Keep heavy native modules server-side only (fluent-ffmpeg, googleapis, etc.)
   serverExternalPackages: [
-    'fluent-ffmpeg', 'formidable', 'googleapis', 'twitter-api-v2',
-    'axios', 'form-data', 'bull',
+    'fluent-ffmpeg', 'formidable', 'googleapis', 'twitter-api-v2', 'axios', 'form-data',
   ],
-  // Acknowledge Turbopack (Next.js 16 default) — no custom config needed
-  turbopack: {},
-  images: {
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
-  },
+  // No remote images: the optimizer must not fetch arbitrary URLs for third parties.
+  images: { remotePatterns: [] },
   async headers() {
     return [
-      {
-        source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Origin', value: process.env.NEXT_PUBLIC_APP_URL || '*' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-Flutterwave-Signature, verif-hash' },
-        ],
-      },
+      { source: '/:path*', headers: SECURITY_HEADERS },
+      // API answers are private and same-origin only (no CORS headers on purpose).
+      { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'no-store' }] },
     ];
   },
 };

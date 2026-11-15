@@ -1,89 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import fs from 'fs';
-import { renderVideo } from '@/lib/ffmpeg-studio';
-import { enqueue, getJob } from '@/lib/queue';
+import { rateLimit } from '@/lib/rate-limit';
+import { currentUser, unauthorized, notFound } from '@/lib/session';
+import { safeMediaPath, safeMediaPaths, isValidJobId } from '@/lib/paths';
+import { getProject, updateProject, hasQuota, quotaExceeded, CAPTION_STYLES, type CaptionStyle } from '@/lib/projects';
+import { startRender } from '@/lib/render-jobs';
 
 export const runtime = 'nodejs';
-export const maxDuration = 600;
 
+const RESOLUTIONS = ['1080x1920', '1920x1080', '1080x1080'] as const;
+
+/**
+ * Starts a render in the background and returns at once; poll GET /api/projects/:jobId
+ * until status is "ready" (or "failed").
+ */
 export async function POST(req: NextRequest) {
+  const user = await currentUser();
+  if (!user) return unauthorized();
+  if (!rateLimit(`render:${user.id}`, 20, 10 * 60_000)) {
+    return NextResponse.json({ error: 'Too many requests, try again in a few minutes.' }, { status: 429 });
+  }
   try {
     const body = await req.json();
     const {
-      jobId,
-      voicePath,
-      musicPath,
-      title,
-      script,
-      hashtags = [],
-      duration = 60,
-      resolution = '1080x1920',
-      musicVolume = 0.2,
-      platforms = ['youtube'],
-      async: isAsync = false,
+      jobId, title, script, hashtags = [], duration = 60, resolution = '1080x1920',
+      musicVolume = 0.2, captionStyle,
     } = body;
 
-    if (!jobId || !voicePath) {
-      return NextResponse.json({ error: 'jobId and voicePath are required' }, { status: 400 });
+    if (!isValidJobId(jobId)) return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
+    const project = await getProject(jobId, user.id);
+    if (!project) return notFound();
+    if (project.status === 'rendering') {
+      return NextResponse.json({ success: true, queued: true, data: { jobId } });
+    }
+    if (!(await hasQuota(user.id))) {
+      return NextResponse.json(quotaExceeded(req.headers.get('x-lang')), { status: 402 });
     }
 
-    if (!fs.existsSync(voicePath)) {
-      return NextResponse.json({ error: `Voice file not found: ${voicePath}` }, { status: 404 });
+    const voicePath = safeMediaPath(body.voicePath);
+    if (!voicePath || !path.basename(voicePath).includes(jobId)) {
+      return NextResponse.json({ error: 'Voice file not found' }, { status: 404 });
     }
+    const musicPath = safeMediaPath(body.musicPath) ?? undefined;
+    const imagePaths = safeMediaPaths(body.imagePaths);
+    const clipPaths = safeMediaPaths(body.clipPaths, 20);
+    const res = (RESOLUTIONS as readonly string[]).includes(resolution) ? resolution : '1080x1920';
+    const dur = Math.min(Math.max(Number(duration) || 60, 5), 600);
+    const style = (CAPTION_STYLES as string[]).includes(captionStyle) ? captionStyle as CaptionStyle : undefined;
 
-    const outputDir  = process.env.OUTPUT_DIR ?? path.join(process.cwd(), 'output');
-    const stockDir   = process.env.STOCK_CLIPS_DIR ?? path.join(process.cwd(), 'stock');
-    const outputPath = path.join(outputDir, `render_${jobId}.mp4`);
-
-    // Async mode: push to queue, return immediately
-    if (isAsync) {
-      const job = enqueue('render_video', {
-        jobId, voicePath, musicPath, title, script, hashtags, duration,
-        resolution, musicVolume, platforms, outputPath,
-      });
-      return NextResponse.json({ success: true, queued: true, queueJobId: job.id });
-    }
-
-    // Sync mode: render immediately (blocks until done)
-    const resolvedMusicPath = musicPath && fs.existsSync(musicPath) ? musicPath : undefined;
-    const finalPath = await renderVideo({
-      voiceoverPath: voicePath,
-      musicPath: resolvedMusicPath,
-      stockClipsDir: stockDir,
-      outputPath,
-      subtitleText: script,
-      duration,
-      musicVolume,
-      resolution: resolution as '1080x1920' | '1920x1080' | '1080x1080',
+    await updateProject(jobId, {
+      title: typeof title === 'string' ? title.slice(0, 255) : project.title,
+      script: typeof script === 'string' ? script : project.script,
+      hashtags: Array.isArray(hashtags) ? hashtags.slice(0, 30).map(String) : project.hashtags,
+      resolution: res, duration: dur, status: 'rendering',
     });
 
-    // Queue social publishing after render
-    if (platforms.length > 0) {
-      enqueue('publish_social', {
-        videoPath: finalPath,
-        title,
-        description: title,
-        hashtags,
-        platforms,
-      });
-    }
+    startRender({
+      projectId: jobId,
+      userId: user.id,
+      options: {
+        voiceoverPath: voicePath, musicPath, imagePaths, clipPaths,
+        stockClipsDir: process.env.STOCK_CLIPS_DIR ?? path.join(process.cwd(), 'stock'),
+        subtitleText: typeof script === 'string' ? script : project.script ?? undefined,
+        duration: dur, musicVolume: Math.min(Math.max(Number(musicVolume) || 0.2, 0), 1),
+        resolution: res as typeof RESOLUTIONS[number], captionStyle: style,
+      },
+      meta: { title, script, hashtags, duration: dur, mode: project.mode },
+    });
 
-    return NextResponse.json({ success: true, data: { outputPath: finalPath, jobId } });
+    return NextResponse.json({ success: true, queued: true, data: { jobId } });
   } catch (err) {
     console.error('[render-video]', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
-}
-
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get('jobId');
-  if (!id) return NextResponse.json({ error: 'jobId required' }, { status: 400 });
-  const job = getJob(id);
-  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-  return NextResponse.json({ success: true, data: job });
 }

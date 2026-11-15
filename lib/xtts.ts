@@ -39,7 +39,7 @@ export async function synthesizeVoice(opts: TTSOptions): Promise<Buffer> {
   const response = await axios.post(
     `${BASE}/tts`,
     { text, language, speed },
-    { responseType: 'arraybuffer', timeout: 300_000 }
+    { responseType: 'arraybuffer', timeout: 420_000 }   // 7 min per chunk on slow CPU
   );
 
   return Buffer.from(response.data);

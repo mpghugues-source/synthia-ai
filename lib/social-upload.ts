@@ -184,3 +184,15 @@ export async function publishAll(payload: PublishPayload): Promise<PublishResult
     payload.platforms.map((platform) => handlers[platform](payload))
   );
 }
+
+/** Which platforms have publishing credentials configured on this server. */
+export function configuredPlatforms(): Record<SocialPlatform, boolean> {
+  const has = (...keys: string[]) => keys.every((k) => Boolean(process.env[k]));
+  return {
+    youtube: has('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN'),
+    tiktok: has('TIKTOK_ACCESS_TOKEN'),
+    instagram: has('INSTAGRAM_ACCESS_TOKEN', 'INSTAGRAM_BUSINESS_ID'),
+    facebook: has('FACEBOOK_ACCESS_TOKEN', 'FACEBOOK_PAGE_ID'),
+    twitter: has('TWITTER_API_KEY', 'TWITTER_API_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET'),
+  };
+}

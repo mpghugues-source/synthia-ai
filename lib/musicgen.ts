@@ -3,7 +3,8 @@ import path from 'path';
 import fs from 'fs';
 
 const SCRIPT = process.env.MUSICGEN_SCRIPT ?? path.join(process.cwd(), 'scripts', 'musicgen_generate.py');
-const PYTHON  = process.env.PYTHON_BIN ?? 'python3';
+// Use the virtualenv python that has audiocraft installed
+const PYTHON  = process.env.MUSICGEN_PYTHON ?? process.env.PYTHON_BIN ?? '/opt/musicgen-env/bin/python3';
 
 export type MusicMood =
   | 'energetic' | 'calm' | 'dramatic' | 'happy' | 'mysterious'
@@ -24,13 +25,14 @@ export function generateMusic(opts: MusicGenOptions): Promise<string> {
 
     fs.mkdirSync(outputDir, { recursive: true });
 
+    // No timeout: MusicGen on CPU can take 30-90 min. Let it finish.
     const proc = spawn(PYTHON, [
       SCRIPT,
       '--mood', mood,
       '--bpm', String(bpm),
       '--duration', String(duration),
       '--output', outputPath,
-    ], { timeout: 300_000 });
+    ]);
 
     let stderr = '';
     proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });

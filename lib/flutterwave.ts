@@ -8,7 +8,7 @@ const BASE = 'https://api.flutterwave.com/v3';
 
 export interface PaymentPlan {
   amount: number;
-  currency: 'XOF' | 'USD' | 'NGN' | 'KES' | 'GHS';
+  currency: 'EUR' | 'USD';
   planName: string;
   email: string;
   name: string;

@@ -59,6 +59,45 @@ export async function generateScript(params: {
   return JSON.parse(jsonMatch[0]);
 }
 
+export interface TrendSuggestion {
+  topic: string;
+  hook: string;
+  whyTrending: string;
+}
+
+/**
+ * Transforme des tendances de recherche réelles (lib/trends.ts) en idées de
+ * sujets vidéo adaptées à une niche donnée — évite de partir d'une page
+ * blanche et ancre le contenu généré dans ce qui se passe réellement en ce
+ * moment sur le marché ciblé.
+ */
+export async function suggestViralTopics(params: {
+  niche: string;
+  market: string;
+  trends: { title: string; articleTitle?: string }[];
+  lang: 'fr' | 'en';
+  count?: number;
+}): Promise<TrendSuggestion[]> {
+  const { niche, market, trends, lang, count = 5 } = params;
+  const trendList = trends
+    .slice(0, 15)
+    .map((t) => `- ${t.title}${t.articleTitle ? ` (${t.articleTitle})` : ''}`)
+    .join('\n');
+
+  const prompt =
+    lang === 'fr'
+      ? `Voici les tendances de recherche réelles sur le marché ${market} aujourd'hui :\n${trendList}\n\nTu es Synthia, experte en contenu viral. Pour la niche "${niche}", propose ${count} idées de vidéos courtes qui s'appuient sur ces tendances (même indirectement). JSON uniquement, format exact :\n{"suggestions":[{"topic":"sujet vidéo concret","hook":"première phrase accrocheuse","whyTrending":"lien avec la tendance en une phrase"}]}`
+      : `Here are today's real search trends in the ${market} market:\n${trendList}\n\nYou are Synthia, a viral content expert. For the "${niche}" niche, suggest ${count} short video ideas that tie into these trends (even indirectly). JSON only, exact format:\n{"suggestions":[{"topic":"concrete video topic","hook":"catchy first line","whyTrending":"one-sentence link to the trend"}]}`;
+
+  const raw = await generateText(prompt, { lang, temperature: 0.8, num_predict: 700 });
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Ollama returned non-JSON response');
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  return parsed.suggestions ?? [];
+}
+
 export async function listModels(): Promise<string[]> {
   const res = await axios.get(`${BASE}/api/tags`, { timeout: 10_000 });
   return (res.data.models ?? []).map((m: { name: string }) => m.name);

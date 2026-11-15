@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature, verifyTransaction } from '@/lib/flutterwave';
+import pool from '@/lib/db';
+import { PLAN_LIMITS } from '@/lib/projects';
+import { PLAN_PRICES } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 
@@ -21,18 +24,33 @@ interface FlutterwaveWebhookBody {
   };
 }
 
-async function activatePlan(email: string, plan: string, txRef: string) {
-  // TODO: write to your DB — shown as console for clarity
-  console.log(`[Billing] Activate plan "${plan}" for ${email} — tx:${txRef}`);
+// A payment activates a plan only if it paid at least the plan's price in EUR or USD.
+const PRICES: Record<string, Record<string, number>> = PLAN_PRICES;
+
+async function activatePlan(email: string, plan: string, amount: number, currency: string, txRef: string) {
+  const min = PRICES[plan]?.[currency];
+  if (!min || amount < min) {
+    console.warn(`[Billing] Payment ${txRef} (${amount} ${currency}) does not match plan "${plan}" — ignored`);
+    return;
+  }
+  const limit = PLAN_LIMITS[plan] ?? 3;
+  await pool.query('UPDATE users SET plan = ?, videos_limit = ? WHERE email = ?', [plan, limit < 0 ? 100000 : limit, email]);
+  console.log(`[Billing] Activated plan "${plan}" for user — tx:${txRef}`);
 }
 
 async function cancelSubscription(email: string) {
-  console.log(`[Billing] Cancel subscription for ${email}`);
+  await pool.query("UPDATE users SET plan = 'free', videos_limit = 3 WHERE email = ?", [email]);
+  console.log('[Billing] Subscription cancelled');
 }
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get('verif-hash') ?? '';
+
+  // Without a configured secret the signature check would be meaningless: refuse everything.
+  if (!process.env.FLUTTERWAVE_WEBHOOK_HASH || !process.env.FLUTTERWAVE_SECRET_KEY) {
+    return NextResponse.json({ error: 'Billing not configured' }, { status: 503 });
+  }
 
   // Security: verify Flutterwave signature
   if (!verifyWebhookSignature(rawBody, signature)) {
@@ -57,8 +75,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Transaction not verified' }, { status: 400 });
     }
 
-    const planName = (data.meta?.plan as string) ?? 'starter';
-    await activatePlan(data.customer.email, planName, data.tx_ref);
+    // Trust only what Flutterwave's API reports, not the webhook body.
+    const planName = String(verified.meta?.plan ?? data.meta?.plan ?? '').toLowerCase();
+    await activatePlan(verified.email, planName, Number(verified.amount), verified.currency, data.tx_ref);
   }
 
   if (event === 'subscription.cancelled') {

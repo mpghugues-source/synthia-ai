@@ -35,3 +35,6 @@ __pycache__/
 # Temp screenshot scripts
 screenshot_*_tmp.cjs
 scroll_capture.js
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
