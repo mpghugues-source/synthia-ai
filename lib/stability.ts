@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import Groq from 'groq-sdk';
+import { extractScenePrompts } from './groq';
 
 const STABILITY_API = 'https://api.stability.ai/v2beta/stable-image/generate/core';
 
@@ -50,26 +50,13 @@ export async function generateImagesFromScript(opts: {
 }): Promise<string[]> {
   const { script, title, resolution, outputDir, jobId, count = 4, style = 'photorealistic, cinematic, dramatic lighting, 8K ultra HD' } = opts;
 
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
   let prompts: string[] = [];
   try {
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{
-        role: 'user',
-        content: `From this text, extract ${count} vivid visual scene descriptions for AI image generation. Return a JSON object with a "prompts" array of ${count} strings. Each prompt should be detailed, visual, and end with: "${style}". Text:\n\n${script.slice(0, 3000)}`,
-      }],
-      response_format: { type: 'json_object' },
-      max_tokens: 500,
-      temperature: 0.7,
-    });
-    const parsed = JSON.parse(completion.choices[0].message.content ?? '{}');
-    prompts = parsed.prompts ?? parsed.scenes ?? parsed.images ?? [];
+    prompts = await extractScenePrompts(script, count, style);
   } catch (e) {
     console.error('[stability] scene extraction failed:', e);
-    prompts = [`${title ?? 'cinematic scene'}, ${style}`];
   }
+  if (!prompts.length) prompts = [`${title ?? 'cinematic scene'}, ${style}`];
 
   const ar = resolution === '1920x1080' ? '16:9' : resolution === '1080x1080' ? '1:1' : '9:16';
 

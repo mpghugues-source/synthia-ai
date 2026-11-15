@@ -11,6 +11,12 @@ import { generateImagesFromScript, stabilityEnabled } from '@/lib/stability';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
+/** Whether AI image generation is available on this server. */
+export async function GET() {
+  if (!(await currentUser())) return unauthorized();
+  return NextResponse.json({ enabled: stabilityEnabled() });
+}
+
 export async function POST(req: NextRequest) {
   const user = await currentUser();
   if (!user) return unauthorized();
@@ -18,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests, try again in a few minutes.' }, { status: 429 });
   }
   if (!stabilityEnabled()) {
-    return NextResponse.json({ error: 'Stability AI not configured (STABILITY_API_KEY missing)' }, { status: 503 });
+    return NextResponse.json({ error: 'images_disabled' }, { status: 503 });
   }
 
   try {

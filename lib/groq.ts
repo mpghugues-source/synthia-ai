@@ -254,3 +254,13 @@ export async function proofreadText(text: string, lang: string): Promise<{ text:
   }
   return { text: result, changes };
 }
+
+/** Visual scene prompts for image generation, extracted from a script. */
+export async function extractScenePrompts(script: string, count: number, style: string): Promise<string[]> {
+  const r = await askJson(
+    'You write prompts for an AI image generator. Prompts are in English, concrete and visual. Reply only in valid JSON.',
+    `From this text, extract ${count} vivid visual scene descriptions, one per key moment, in story order. ` +
+    `No text, letters or logos in the images. End each prompt with: "${style.slice(0, 200)}". ` +
+    `JSON: {"prompts":["..."]}\nText:\n"""${script.slice(0, 4000)}"""`, 1200, 0.7);
+  return Array.isArray(r.prompts) ? r.prompts.map(String).slice(0, count) : [];
+}

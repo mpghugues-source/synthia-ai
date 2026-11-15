@@ -211,7 +211,7 @@ const UI: Record<Lang, Record<string, string>> = {
     narr_how3:         'La vidéo dure exactement le temps de la lecture',
     narr_how4:         'Ajoutez des images de fond en option',
     narr_how5:         'Format portrait (Shorts), paysage (YouTube) ou carré',
-    narr_gen_images:   'Générer des images IA (Stability AI)',
+    narr_gen_images:   'Générer des images IA',
     narr_gen_images_on:'Images IA : ACTIVÉ',
     narr_style:        'Style des images',
     narr_style_ph:     'ex: illustration biblique, aquarelle, photoréaliste...',
@@ -296,7 +296,7 @@ const UI: Record<Lang, Record<string, string>> = {
     narr_how3:         'Video duration exactly matches the reading time',
     narr_how4:         'Optionally add background images',
     narr_how5:         'Portrait (Shorts), landscape (YouTube), or square format',
-    narr_gen_images:   'Generate AI images (Stability AI)',
+    narr_gen_images:   'Generate AI images',
     narr_gen_images_on:'AI images: ON',
     narr_style:        'Image style',
     narr_style_ph:     'e.g. biblical illustration, watercolor, photorealistic...',
@@ -655,6 +655,7 @@ export default function DashboardPage() {
   const [templateId, setTemplateId] = useState<string>('');
   const [publishResults, setPublishResults] = useState<{ platform: string; success: boolean; url?: string; error?: string }[] | null>(null);
   const [configuredPlatforms, setConfiguredPlatforms] = useState<Record<string, boolean>>({});
+  const [imagesEnabled, setImagesEnabled] = useState(true);
   const [duration,   setDuration]   = useState(60);
   const [mood,       setMood]       = useState<string>('energetic');
   const [bpm,        setBpm]        = useState(120);
@@ -815,6 +816,8 @@ export default function DashboardPage() {
       setCaptionStyle(b.captionStyle);
       if (b.defaultVoice) { setElVoiceId(b.defaultVoice); setNarrVoiceId(b.defaultVoice); }
     }).catch(() => {});
+    fetch('/api/media/generate-images').then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j && j.enabled === false) { setImagesEnabled(false); setNarrGenImages(false); } }).catch(() => {});
     fetch('/api/social/publish').then((r) => (r.ok ? r.json() : null))
       .then((j) => j?.platforms && setConfiguredPlatforms(j.platforms)).catch(() => {});
     const q = new URLSearchParams(window.location.search);
@@ -1284,8 +1287,9 @@ export default function DashboardPage() {
                         <span className="text-xs text-green-400">✓ {aiImages.length} {u.ai_gen_images_ok}</span>
                       )}
                     </div>
-                    {aiImgError && <p className="text-red-400 text-xs">{aiImgError}</p>}
-                    <button onClick={generateAIImages} disabled={aiImgStatus === 'loading'}
+                    {!imagesEnabled && <p className="text-xs text-slate-400">{lang === 'fr' ? 'Images IA non activées sur ce serveur pour le moment : la vidéo utilisera un fond animé à vos couleurs, ou vos propres images.' : 'AI images are not enabled on this server yet: the video will use a branded background, or your own images.'}</p>}
+                    {aiImgError && <p className="text-red-400 text-xs">{aiImgError.includes('images_disabled') ? (lang === 'fr' ? 'Images IA non activées sur ce serveur pour le moment : la vidéo utilisera un fond animé à vos couleurs, ou vos propres images.' : 'AI images are not enabled on this server yet: the video will use a branded background, or your own images.') : aiImgError}</p>}
+                    <button onClick={generateAIImages} disabled={aiImgStatus === 'loading' || !imagesEnabled}
                       className="w-full py-2.5 rounded-xl border border-violet-500/50 bg-violet-500/10 text-violet-300 text-sm font-medium hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                       {aiImgStatus === 'loading' ? u.ai_gen_images_loading : u.ai_gen_images}
                     </button>
@@ -1511,12 +1515,13 @@ export default function DashboardPage() {
               {/* AI image generation toggle */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setNarrGenImages((v) => !v)}
+                  <button onClick={() => imagesEnabled && setNarrGenImages((v) => !v)} disabled={!imagesEnabled}
                     className={`w-10 h-6 rounded-full transition-all ${narrGenImages ? 'bg-violet-600' : 'bg-[#2A2A45]'} relative flex-shrink-0`}>
                     <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${narrGenImages ? 'left-4' : 'left-0.5'}`} />
                   </button>
-                  <label className="text-sm text-slate-300">
+                  <label className={`text-sm ${imagesEnabled ? 'text-slate-300' : 'text-slate-500'}`}>
                     {narrGenImages ? u.narr_gen_images_on : u.narr_gen_images}
+                    {!imagesEnabled && <span className="block text-xs text-slate-500">{lang === 'fr' ? 'Non activé pour le moment' : 'Not enabled yet'}</span>}
                   </label>
                   {narrGenImages && (
                     <select value={narrImageCount} onChange={(e) => setNarrImageCount(Number(e.target.value))}
