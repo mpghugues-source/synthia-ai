@@ -4,14 +4,10 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { PageHeader, inputCls, btnPrimary, btnGhost } from '@/components/dashboard/Shell';
 import type { ProjectDto } from '@/components/dashboard/types';
+import PublishPanel, { publishErrorText, type PublishSelection } from '@/components/dashboard/PublishPanel';
 
 type Lang = 'fr' | 'en';
 
-const PLATFORMS = [
-  { id: 'youtube', label: 'YouTube', icon: '▶' }, { id: 'tiktok', label: 'TikTok', icon: '♪' },
-  { id: 'instagram', label: 'Instagram', icon: '◉' }, { id: 'facebook', label: 'Facebook', icon: 'f' },
-  { id: 'twitter', label: 'X', icon: '✕' },
-];
 
 function toLocalInput(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -26,8 +22,7 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selId, setSelId] = useState('');
   const [when, setWhen] = useState(() => { const d = new Date(Date.now() + 3600_000); d.setMinutes(0); return toLocalInput(d); });
-  const [plats, setPlats] = useState<string[]>(['youtube', 'tiktok']);
-  const [configured, setConfigured] = useState<Record<string, boolean>>({});
+  const [selection, setSelection] = useState<PublishSelection | null>(null);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +32,6 @@ export default function CalendarPage() {
 
   useEffect(() => {
     load();
-    fetch('/api/social/publish').then((r) => (r.ok ? r.json() : null)).then((j) => j?.platforms && setConfigured(j.platforms)).catch(() => {});
     const pid = new URLSearchParams(window.location.search).get('project');
     if (pid) setSelId(pid);
   }, [load]);
@@ -67,7 +61,7 @@ export default function CalendarPage() {
     try {
       const res = await fetch(`/api/projects/${selId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedule: { at: new Date(when).toISOString(), platforms: plats } }),
+        body: JSON.stringify({ schedule: { at: new Date(when).toISOString(), platforms: selection?.platforms ?? [], options: selection?.options } }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? 'Error');
@@ -84,7 +78,6 @@ export default function CalendarPage() {
 
   const weekdays = lang === 'fr' ? ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const today = new Date().toDateString();
-  const noneConfigured = Object.keys(configured).length > 0 && !Object.values(configured).some(Boolean);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -93,13 +86,6 @@ export default function CalendarPage() {
           ? 'Planifiez vos vidéos aux meilleurs horaires : Synthia les publie automatiquement, même quand vous dormez.'
           : 'Plan your videos at the best times: Synthia publishes them automatically, even while you sleep.'} />
 
-      {noneConfigured && (
-        <div className="mb-6 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm">
-          {lang === 'fr'
-            ? 'Aucun compte social n’est encore connecté sur ce serveur : les publications programmées seront marquées « compte non connecté ». Contactez l’administrateur pour connecter YouTube, TikTok, Instagram, Facebook ou X.'
-            : 'No social account is connected on this server yet: scheduled posts will be marked “account not connected”. Ask the administrator to connect YouTube, TikTok, Instagram, Facebook or X.'}
-        </div>
-      )}
 
       <div className="grid lg:grid-cols-[1fr_340px] gap-6">
         {/* Month grid */}
@@ -143,16 +129,10 @@ export default function CalendarPage() {
               {ready.map((p) => <option key={p.id} value={p.id}>{p.title ?? p.id}</option>)}
             </select>
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={inputCls} />
-            <div className="flex flex-wrap gap-2">
-              {PLATFORMS.map((p) => (
-                <button key={p.id} type="button"
-                  onClick={() => setPlats((x) => (x.includes(p.id) ? x.filter((y) => y !== p.id) : [...x, p.id]))}
-                  className={`px-3 py-1.5 rounded-lg border text-xs ${plats.includes(p.id) ? 'border-violet-500 bg-violet-500/20 text-violet-200' : 'border-[#2A2A45] text-slate-400'}`}>
-                  {p.icon} {p.label}{configured[p.id] === false ? ' ·' : ''}
-                </button>
-              ))}
-            </div>
-            <button onClick={schedule} disabled={busy || !selId || !plats.length} className={`${btnPrimary} w-full`}>
+            <PublishPanel key={selId} lang={lang} onChange={setSelection}
+              videoDurationSec={ready.find((p) => p.id === selId)?.duration ?? null}
+              defaultCaption={(() => { const p = ready.find((x) => x.id === selId); return p ? `${p.title ?? ''}\n\n${(p.script ?? '').slice(0, 600)}`.trim() : ''; })()} />
+            <button onClick={schedule} disabled={busy || !selId || !selection?.valid} className={`${btnPrimary} w-full`}>
               {busy ? '…' : (lang === 'fr' ? 'Programmer' : 'Schedule')}
             </button>
             {msg && <p className="text-xs text-slate-300">{msg}</p>}
@@ -177,6 +157,33 @@ export default function CalendarPage() {
                 ))}
               {!planned.some((p) => p.publishStatus === 'scheduled') && (
                 <p className="text-xs text-slate-500">{lang === 'fr' ? 'Rien de programmé.' : 'Nothing scheduled.'}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="glow-card rounded-3xl p-5">
+            <h3 className="text-white font-semibold mb-3">{lang === 'fr' ? 'Dernières publications' : 'Recent posts'}</h3>
+            <div className="space-y-3">
+              {projects.filter((p) => p.publishStatus === 'published' || p.publishStatus === 'failed' || p.publishStatus === 'publishing')
+                .slice(0, 6).map((p) => (
+                  <div key={p.id} className="text-sm">
+                    <div className="text-white truncate">{p.title}</div>
+                    {p.publishStatus === 'publishing'
+                      ? <div className="text-[11px] text-violet-300">{lang === 'fr' ? 'Publication en cours…' : 'Publishing…'}</div>
+                      : (Array.isArray(p.publishResults) ? p.publishResults as { platform: string; success: boolean; url?: string; error?: string }[] : []).map((r, i) => (
+                        <div key={i} className="text-[11px] flex gap-2">
+                          <span className={r.success ? 'text-green-400' : 'text-red-300'}>{r.success ? '✓' : '✕'}</span>
+                          <span className="capitalize text-slate-300">{r.platform}</span>
+                          <span className="text-slate-500 truncate">{r.success
+                            ? (r.url?.startsWith('https://') ? <a href={r.url} target="_blank" rel="noreferrer" className="text-violet-400">{lang === 'fr' ? 'Voir' : 'View'}</a>
+                              : r.url === 'tiktok://inbox' ? (lang === 'fr' ? 'brouillon dans TikTok' : 'draft in TikTok') : 'OK')
+                            : publishErrorText(r.error, lang)}</span>
+                        </div>
+                      ))}
+                  </div>
+                ))}
+              {!projects.some((p) => ['published', 'failed', 'publishing'].includes(p.publishStatus)) && (
+                <p className="text-xs text-slate-500">{lang === 'fr' ? 'Aucune publication pour le moment.' : 'No posts yet.'}</p>
               )}
             </div>
           </div>

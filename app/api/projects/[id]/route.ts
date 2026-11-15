@@ -4,7 +4,7 @@ import fs from 'fs';
 import { currentUser, unauthorized, notFound } from '@/lib/session';
 import { OUTPUT_DIR, UPLOAD_DIR, isValidJobId } from '@/lib/paths';
 import { getProject, updateProject, deleteProject } from '@/lib/projects';
-import { sanitizePlatforms } from '@/lib/publish';
+import { sanitizePlatforms, sanitizeOptions } from '@/lib/publish';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +50,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (r.project.status !== 'ready') return NextResponse.json({ error: 'video not ready' }, { status: 409 });
     fields.scheduledAt = at.toISOString();
     fields.platforms = platforms;
+    fields.publishOptions = sanitizeOptions(body.schedule.options);
     fields.publishStatus = 'scheduled';
   }
   await updateProject(r.project.id, fields);

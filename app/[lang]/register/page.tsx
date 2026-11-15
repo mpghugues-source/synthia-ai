@@ -89,6 +89,13 @@ export default function RegisterPage() {
               </div>
             )}
 
+            <p className="text-xs text-slate-500">
+              {lang === 'fr' ? 'En créant un compte, vous acceptez les ' : 'By creating an account you accept the '}
+              <a href={`/${lang}/terms`} target="_blank" className="text-violet-400">{lang === 'fr' ? 'conditions d’utilisation' : 'terms of service'}</a>
+              {lang === 'fr' ? ' et la ' : ' and the '}
+              <a href={`/${lang}/privacy`} target="_blank" className="text-violet-400">{lang === 'fr' ? 'politique de confidentialité' : 'privacy policy'}</a>.
+            </p>
+
             <button type="submit" disabled={loading}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 text-white font-semibold disabled:opacity-50 hover:opacity-90 transition-all">
               {loading ? t.loading : t.btn}

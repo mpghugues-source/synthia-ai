@@ -33,6 +33,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ result });
   } catch (e) {
     console.error('[viral]', e);
-    return NextResponse.json({ error: 'AI request failed, please retry.' }, { status: 502 });
+    return NextResponse.json({ error: 'AI request failed, please retry.' }, { status: 503 });
   }
 }

@@ -6,7 +6,8 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://checkout.flutterwave.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  // Profile pictures of connected YouTube/TikTok accounts.
+  "img-src 'self' data: blob: https://*.ggpht.com https://*.googleusercontent.com https://*.tiktokcdn.com https://*.tiktokcdn-us.com https://*.tiktokcdn-eu.com",
   "font-src 'self' data:",
   "media-src 'self' blob:",
   "connect-src 'self' https://api.flutterwave.com",

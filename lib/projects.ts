@@ -23,6 +23,7 @@ export interface Project {
   scheduledAt: string | null;
   publishStatus: PublishStatus;
   publishResults: unknown;
+  publishOptions: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,7 +33,7 @@ interface ProjectRow extends RowDataPacket {
   hashtags: string | null; status: ProjectStatus; output_file: string | null; thumb_file: string | null;
   duration: number | null; resolution: string | null; file_size: number | null; error: string | null;
   platforms: string | null; scheduled_at: Date | null; publish_status: PublishStatus;
-  publish_results: string | null; created_at: Date; updated_at: Date;
+  publish_results: string | null; publish_options: string | null; created_at: Date; updated_at: Date;
 }
 
 function parseJson<T>(raw: string | null, fallback: T): T {
@@ -49,6 +50,7 @@ function toProject(r: ProjectRow): Project {
     error: r.error, platforms: parseJson<string[]>(r.platforms, []),
     scheduledAt: r.scheduled_at ? new Date(r.scheduled_at).toISOString() : null,
     publishStatus: r.publish_status, publishResults: parseJson<unknown>(r.publish_results, null),
+    publishOptions: parseJson<unknown>(r.publish_options, null),
     createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(),
   };
 }
@@ -82,9 +84,9 @@ const COLUMN: Record<string, string> = {
   mode: 'mode', title: 'title', script: 'script', hashtags: 'hashtags', status: 'status',
   outputFile: 'output_file', thumbFile: 'thumb_file', duration: 'duration', resolution: 'resolution',
   fileSize: 'file_size', error: 'error', platforms: 'platforms', scheduledAt: 'scheduled_at',
-  publishStatus: 'publish_status', publishResults: 'publish_results',
+  publishStatus: 'publish_status', publishResults: 'publish_results', publishOptions: 'publish_options',
 };
-const JSON_FIELDS = new Set(['hashtags', 'platforms', 'publishResults']);
+const JSON_FIELDS = new Set(['hashtags', 'platforms', 'publishResults', 'publishOptions']);
 
 export async function updateProject(id: string, fields: Partial<Omit<Project, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<void> {
   const sets: string[] = [];

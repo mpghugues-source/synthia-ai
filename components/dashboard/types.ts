@@ -4,4 +4,5 @@ export interface ProjectDto {
   thumbFile: string | null; duration: number | null; resolution: string | null; fileSize: number | null;
   error: string | null; platforms: string[]; scheduledAt: string | null;
   publishStatus: 'none' | 'scheduled' | 'publishing' | 'published' | 'failed'; createdAt: string;
+  publishResults?: unknown;
 }

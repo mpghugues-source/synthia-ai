@@ -18,6 +18,7 @@ const NAV = [
   { href: '/viral', icon: '🚀', fr: 'Viral Lab', en: 'Viral Lab' },
   { href: '/library', icon: '🎞️', fr: 'Bibliothèque', en: 'Library' },
   { href: '/calendar', icon: '🗓️', fr: 'Calendrier', en: 'Calendar' },
+  { href: '/accounts', icon: '🔗', fr: 'Comptes connectés', en: 'Connected accounts' },
   { href: '/brand', icon: '🎨', fr: 'Brand kit', en: 'Brand kit' },
   { href: '/account', icon: '💎', fr: 'Abonnement', en: 'Plan & billing' },
 ];
@@ -75,7 +76,7 @@ export default function Shell({ lang, children }: { lang: Lang; children: React.
   const otherLang = lang === 'fr' ? 'en' : 'fr';
   const name = session?.user?.name ?? session?.user?.email ?? '';
 
-  const isActive = (href: string) => (href === '' ? current === '' : current.startsWith(href));
+  const isActive = (href: string) => (href === '' ? current === '' : current === href || current.startsWith(`${href}/`));
 
   return (
     <div className="min-h-screen bg-[#0B0B16] text-slate-200 lg:flex">

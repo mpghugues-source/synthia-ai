@@ -3,7 +3,8 @@
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PageHeader, useMe } from '@/components/dashboard/Shell';
-import { CONTACT_EMAIL, whatsappLink } from '@/lib/contact';
+import { whatsappLink } from '@/lib/contact';
+import Email from '@/components/Email';
 import { PLAN_PRICES, formatPrice, type Currency } from '@/lib/pricing';
 
 type Lang = 'fr' | 'en';
@@ -114,7 +115,7 @@ export default function AccountPage() {
       <p className="text-xs text-slate-500 mt-6 text-center">
         {lang === 'fr' ? 'Paiement en euros ou en dollars, par carte, Mobile Money ou virement. Une question ?' : 'Pay in euros or dollars, by card, Mobile Money or bank transfer. Questions?'}{' '}
         <a href={whatsappLink('Synthia AI')} target="_blank" rel="noreferrer" className="text-violet-400">WhatsApp</a> ·{' '}
-        <a href={`mailto:${CONTACT_EMAIL}`} className="text-violet-400">{CONTACT_EMAIL}</a>
+        <Email className="text-violet-400" />
       </p>
     </div>
   );

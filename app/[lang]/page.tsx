@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { CONTACT_EMAIL, whatsappLink } from '@/lib/contact';
+import { whatsappLink } from '@/lib/contact';
+import Email from '@/components/Email';
 import { PLAN_PRICES, formatPrice, type Currency } from '@/lib/pricing';
 
 type Lang = 'fr' | 'en';
@@ -366,10 +367,12 @@ export default function LandingPage() {
             <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold text-xs">S</span>
             {t.footer}
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             <a href={whatsappLink('Synthia AI')} target="_blank" rel="noreferrer" className="hover:text-white">WhatsApp</a>
-            <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white">{CONTACT_EMAIL}</a>
+            <Email className="hover:text-white" />
             <a href="https://ikelyane.com" className="hover:text-white">ikelyane.com</a>
+            <a href={`/${lang}/privacy`} className="hover:text-white">{lang === 'fr' ? 'Confidentialité' : 'Privacy'}</a>
+            <a href={`/${lang}/terms`} className="hover:text-white">{lang === 'fr' ? 'Conditions' : 'Terms'}</a>
           </div>
         </div>
       </footer>

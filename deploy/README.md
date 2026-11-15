@@ -34,9 +34,7 @@ After changing Apache files: `/scripts/rebuildhttpdconf && apachectl -t && /scri
   long may run inside a request.
 - `synthia-cron` calls `POST /api/internal/publish-due` every minute (header `x-synthia-internal`)
   to publish scheduled videos.
-- Social publishing uses the server-wide credentials (`YOUTUBE_*`, `TIKTOK_ACCESS_TOKEN`,
-  `INSTAGRAM_*`, `FACEBOOK_*`, `TWITTER_*`). Platforms without credentials are reported as
-  `not_configured`.
+- Social publishing: each user connects their OWN accounts (page « Comptes connectés »), see below.
 - Paid plans: Flutterwave webhook `/api/billing/webhook` activates the plan only when
   `FLUTTERWAVE_WEBHOOK_HASH` and `FLUTTERWAVE_SECRET_KEY` are set and the verified amount matches
   the plan price. Without `NEXT_PUBLIC_FLW_PUBLIC_KEY` (build time) the upgrade buttons open WhatsApp.
@@ -59,3 +57,20 @@ After changing Apache files: `/scripts/rebuildhttpdconf && apachectl -t && /scri
 `/api/sw` serves `public/sw.js` stamped with `.next/BUILD_ID`: each deployment is a new worker; the page checks
 every 20 min and on focus, applies at once in background tabs, otherwise shows a 15 s countdown banner.
 Dashboard pages are never cached (private data); offline fallback `public/offline.html`.
+
+## Social accounts (YouTube, TikTok) — per-user OAuth
+
+Users connect their own channel/account; tokens are stored AES-256-GCM-encrypted in `social_accounts`
+(key `SOCIAL_TOKEN_KEY` in `/etc/synthia/app.env` — losing it means every user must reconnect).
+Publishing runs in the background (`lib/publish.ts`); scheduled posts keep their options in `projects.publish_options`.
+
+To enable a platform, add its developer-app credentials to `/etc/synthia/app.env`, then `systemctl restart synthia-app`:
+
+| Platform | Variables | Redirect URI to declare |
+|---|---|---|
+| YouTube (Google Cloud: YouTube Data API v3 + OAuth client "Web application") | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | `https://synthia.ikelyane.com/api/social/callback/youtube` |
+| TikTok (developers.tiktok.com: Login Kit + Content Posting API) | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` (optional `TIKTOK_SCOPES`) | `https://synthia.ikelyane.com/api/social/callback/tiktok` |
+
+Scopes requested: YouTube `youtube.upload` + `youtube.readonly`; TikTok `user.info.basic,video.upload,video.publish`
+(if Direct Post is not added to the TikTok app yet, set `TIKTOK_SCOPES=user.info.basic,video.upload`: drafts only).
+Public pages required by Google/TikTok reviews: `/fr/privacy`, `/en/privacy`, `/fr/terms`, `/en/terms`.

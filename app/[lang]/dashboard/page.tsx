@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import PublishPanel, { publishErrorText, type PublishSelection } from '@/components/dashboard/PublishPanel';
 
 type Lang       = 'fr' | 'en';
 type Step       = 'script' | 'audio' | 'video' | 'publish';
@@ -123,13 +124,6 @@ interface GeneratedData {
   duration?: number;
 }
 
-const PLATFORM_OPTS = [
-  { id: 'youtube',   label: 'YouTube Shorts', icon: '▶' },
-  { id: 'tiktok',    label: 'TikTok',         icon: '♪' },
-  { id: 'instagram', label: 'Instagram Reels', icon: '◉' },
-  { id: 'facebook',  label: 'Facebook',        icon: 'f' },
-  { id: 'twitter',   label: 'X / Twitter',     icon: '✕' },
-] as const;
 
 const MOOD_OPTS = ['energetic','calm','dramatic','happy','corporate','epic','cinematic','lofi'] as const;
 
@@ -654,12 +648,11 @@ export default function DashboardPage() {
   useEffect(() => { try { if (localStorage.getItem('synthia:autofix') === '0') setAutoFixState(false); } catch { /* ignore */ } }, []);
   const [templateId, setTemplateId] = useState<string>('');
   const [publishResults, setPublishResults] = useState<{ platform: string; success: boolean; url?: string; error?: string }[] | null>(null);
-  const [configuredPlatforms, setConfiguredPlatforms] = useState<Record<string, boolean>>({});
+  const [selection, setSelection] = useState<PublishSelection | null>(null);
   const [imagesEnabled, setImagesEnabled] = useState(true);
   const [duration,   setDuration]   = useState(60);
   const [mood,       setMood]       = useState<string>('energetic');
   const [bpm,        setBpm]        = useState(120);
-  const [platforms,  setPlatforms]  = useState<string[]>(['youtube', 'tiktok']);
   const [resolution, setResolution] = useState<Resolution>('1080x1920');
   const [status,     setStatus]     = useState<JobStatus>('idle');
   const [step,       setStep]       = useState<Step>('script');
@@ -818,8 +811,6 @@ export default function DashboardPage() {
     }).catch(() => {});
     fetch('/api/media/generate-images').then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (j && j.enabled === false) { setImagesEnabled(false); setNarrGenImages(false); } }).catch(() => {});
-    fetch('/api/social/publish').then((r) => (r.ok ? r.json() : null))
-      .then((j) => j?.platforms && setConfiguredPlatforms(j.platforms)).catch(() => {});
     const q = new URLSearchParams(window.location.search);
     const t = q.get('topic');
     if (t) setTopic(t.slice(0, 300));
@@ -839,8 +830,6 @@ export default function DashboardPage() {
     setDuration(t.duration); setMood(t.mood); setBpm(t.bpm); setResolution(t.resolution);
   };
 
-  const togglePlatform = (id: string) =>
-    setPlatforms((prev) => prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]);
 
   // ── AI mode handlers ──────────────────────────────────────────────────────────
   const generateAudio = useCallback(async () => {
@@ -889,13 +878,19 @@ export default function DashboardPage() {
       const res = await fetch('/api/social/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: data.jobId, platforms }),
+        body: JSON.stringify({ projectId: data.jobId, platforms: selection?.platforms ?? [], options: selection?.options }),
       });
-      const json = await apiJson(res);
-      setPublishResults(json.data ?? []);
+      await apiJson(res);
+      // Uploads run in the background: follow the project until publishing is over.
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const r = await fetch(`/api/projects/${data.jobId}`).catch(() => null);
+        const p = r?.ok ? (await r.json()).project : null;
+        if (p && p.publishStatus !== 'publishing') { setPublishResults(p.publishResults ?? []); break; }
+      }
       setStatus('done');
     } catch (e) { setError(errMsg(e)); setStatus('error'); }
-  }, [data, platforms]);
+  }, [data, selection]);
 
   // ── AI mode: generate images from script ────────────────────────────────────
   const generateAIImages = useCallback(async () => {
@@ -1142,17 +1137,8 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-3">{u.platforms}</label>
-                  <div className="flex flex-wrap gap-2">
-                    {PLATFORM_OPTS.map((p) => (
-                      <button key={p.id} onClick={() => togglePlatform(p.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-all ${
-                          platforms.includes(p.id) ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-[#2A2A45] text-slate-500 hover:border-slate-500'
-                        }`}>
-                        <span>{p.icon}</span> {p.label}
-                        {configuredPlatforms[p.id] === false && <span className="text-[10px] text-slate-600">({lang === 'fr' ? 'non connecté' : 'not connected'})</span>}
-                      </button>
-                    ))}
-                  </div>
+                  <PublishPanel lang={lang} onChange={setSelection} videoDurationSec={duration}
+                    defaultCaption={data.script ? `${data.title ?? ''}\n\n${data.script.slice(0, 600)}`.trim() : undefined} />
                   <p className="text-[11px] text-slate-600 mt-2">{lang === 'fr'
                     ? 'Vous pourrez aussi programmer la publication depuis le Calendrier.'
                     : 'You can also schedule publishing from the Calendar.'}</p>
@@ -1167,8 +1153,9 @@ export default function DashboardPage() {
                         <span className="text-slate-200 capitalize">{r.platform}</span>
                         <span className="ml-auto text-xs text-slate-500">
                           {r.success
-                            ? (r.url ? <a href={r.url} target="_blank" rel="noreferrer" className="text-violet-400">{lang === 'fr' ? 'Voir' : 'View'}</a> : 'OK')
-                            : r.error === 'not_configured' ? (lang === 'fr' ? 'compte non connecté' : 'account not connected') : (r.error ?? '')}
+                            ? (r.url?.startsWith('https://') ? <a href={r.url} target="_blank" rel="noreferrer" className="text-violet-400">{lang === 'fr' ? 'Voir' : 'View'}</a>
+                              : r.url === 'tiktok://inbox' ? (lang === 'fr' ? 'brouillon envoyé dans TikTok' : 'draft sent to TikTok') : 'OK')
+                            : publishErrorText(r.error, lang)}
                         </span>
                       </div>
                     ))}
@@ -1189,7 +1176,7 @@ export default function DashboardPage() {
                     </button>
                   )}
                   {step === 'publish' && (
-                    <button onClick={publishAll} disabled={isLoading || !platforms.length}
+                    <button onClick={publishAll} disabled={isLoading || !selection?.valid}
                       className="w-full py-4 rounded-xl bg-gradient-to-r from-green-600 to-teal-600 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-all">
                       {isLoading ? u.publishing : u.publish}
                     </button>

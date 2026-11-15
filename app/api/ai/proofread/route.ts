@@ -24,6 +24,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(out);
   } catch (e) {
     console.error('[proofread]', e);
-    return NextResponse.json({ error: 'AI request failed, please retry.' }, { status: 502 });
+    return NextResponse.json({ error: 'AI request failed, please retry.' }, { status: 503 });
   }
 }

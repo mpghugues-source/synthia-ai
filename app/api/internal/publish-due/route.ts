@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isInternalRequest } from '@/lib/session';
 import { dueScheduledProjects, updateProject } from '@/lib/projects';
-import { publishProject, sanitizePlatforms } from '@/lib/publish';
+import { publishProject, sanitizePlatforms, sanitizeOptions } from '@/lib/publish';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -13,12 +13,12 @@ export async function POST(req: NextRequest) {
   const done: { id: string; ok: boolean }[] = [];
   for (const p of due) {
     try {
-      const results = await publishProject(p, sanitizePlatforms(p.platforms));
+      const results = await publishProject(p, sanitizePlatforms(p.platforms), sanitizeOptions(p.publishOptions));
       done.push({ id: p.id, ok: results.some((r) => r.success) });
     } catch (e) {
       await updateProject(p.id, {
         publishStatus: 'failed',
-        publishResults: [{ success: false, error: e instanceof Error ? e.message : String(e) }],
+        publishResults: [{ success: false, error: 'upload_failed' }],
       });
       done.push({ id: p.id, ok: false });
     }
