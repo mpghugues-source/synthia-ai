@@ -28,9 +28,9 @@ interface CreatorInfo {
 const PLATFORMS: { id: Platform; label: string; icon: string; live: boolean }[] = [
   { id: 'youtube', label: 'YouTube', icon: '▶', live: true },
   { id: 'tiktok', label: 'TikTok', icon: '♪', live: true },
-  { id: 'instagram', label: 'Instagram', icon: '◉', live: false },
-  { id: 'facebook', label: 'Facebook', icon: 'f', live: false },
-  { id: 'twitter', label: 'X', icon: '✕', live: false },
+  { id: 'instagram', label: 'Instagram', icon: '◉', live: true },
+  { id: 'facebook', label: 'Facebook', icon: 'f', live: true },
+  { id: 'twitter', label: 'X', icon: '✕', live: true },
 ];
 
 const PRIVACY_LABEL: Record<string, [string, string]> = {
@@ -52,6 +52,14 @@ export const PUBLISH_ERRORS: Record<string, [string, string]> = {
   tiktok_branded_private: ['un partenariat rémunéré ne peut pas être privé', 'branded content cannot be private'],
   upload_failed: ['échec de l’envoi', 'upload failed'],
   no_channel: ['ce compte Google n’a pas de chaîne YouTube', 'this Google account has no YouTube channel'],
+  instagram_processing_failed: ['Instagram a refusé la vidéo (format ou durée)', 'Instagram rejected the video (format or length)'],
+  instagram_timeout: ['Instagram traite encore la vidéo, réessayez dans quelques minutes', 'Instagram is still processing, retry in a few minutes'],
+  instagram_rate_limit: ['limite Instagram atteinte (100 publications / 24 h)', 'Instagram limit reached (100 posts / 24 h)'],
+  x_processing_failed: ['X a refusé la vidéo', 'X rejected the video'],
+  x_forbidden: ['X refuse la publication (offre API ou durée de vidéo)', 'X refused the post (API plan or video length)'],
+  x_rate_limit: ['trop de publications X, réessayez plus tard', 'too many X posts, retry later'],
+  approval_required: ['approuvez d’abord la vidéo (contrôle qualité)', 'approve the video first (quality check)'],
+  qa_failed: ['contrôle qualité non passé : vidéo retenue', 'quality check failed: video held'],
 };
 
 export function publishErrorText(code: string | undefined, lang: Lang): string {
@@ -116,7 +124,7 @@ export default function PublishPanel({ lang, onChange, defaultCaption, videoDura
 
   const toggle = (p: Platform) => setPlatforms((x) => (x.includes(p) ? x.filter((y) => y !== p) : [...x, p]));
   const box = 'rounded-xl border border-[#2A2A45] bg-black/20 p-3 space-y-2';
-  const noneConnected = connected && !connected.youtube && !connected.tiktok;
+  const noneConnected = connected && !Object.values(connected).some(Boolean);
 
   return (
     <div className="space-y-3">
@@ -139,7 +147,7 @@ export default function PublishPanel({ lang, onChange, defaultCaption, videoDura
 
       {noneConnected && (
         <p className="text-xs text-slate-400">
-          {fr ? 'Connectez votre chaîne YouTube ou votre compte TikTok pour publier automatiquement. ' : 'Connect your YouTube channel or TikTok account to publish automatically. '}
+          {fr ? 'Connectez vos comptes (YouTube, TikTok, Instagram, Facebook, X) pour publier automatiquement. ' : 'Connect your accounts (YouTube, TikTok, Instagram, Facebook, X) to publish automatically. '}
           <a href={`/${lang}/dashboard/accounts`} className="text-violet-400 hover:text-violet-300">{fr ? 'Connecter mes comptes →' : 'Connect my accounts →'}</a>
         </p>
       )}

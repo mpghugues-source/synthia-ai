@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import GoogleButton from '@/components/GoogleButton';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,6 +47,8 @@ export default function LoginPage() {
         <div className="bg-[#16162A] border border-[#2A2A45] rounded-2xl p-8">
           <h1 className="text-2xl font-bold text-white mb-1">{t.title}</h1>
           <p className="text-slate-500 text-sm mb-6">{t.sub}</p>
+
+          <GoogleButton lang={lang} />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

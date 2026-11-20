@@ -3,6 +3,9 @@ import { currentUser } from '@/lib/session';
 import { CONNECTABLE, APP_URL, readStateCookie, saveAccount, type ConnectablePlatform } from '@/lib/social/accounts';
 import { youtubeConnect } from '@/lib/social/youtube';
 import { tiktokConnect } from '@/lib/social/tiktok';
+import { instagramConnect } from '@/lib/social/instagram';
+import { facebookConnect } from '@/lib/social/facebook';
+import { xConnect } from '@/lib/social/x';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,13 +32,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
   if (!code) return back(`error=denied&platform=${p}`);
 
   try {
-    const account = p === 'youtube' ? await youtubeConnect(user.id, code) : await tiktokConnect(user.id, code);
+    const account = p === 'youtube' ? await youtubeConnect(user.id, code)
+      : p === 'tiktok' ? await tiktokConnect(user.id, code)
+      : p === 'instagram' ? await instagramConnect(user.id, code)
+      : p === 'facebook' ? await facebookConnect(user.id, code)
+      : await xConnect(user.id, code, state.nonce);
     await saveAccount(account);
     return back(`connected=${p}`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';
     console.error(`[social ${p}] connect failed`, msg);
-    const reason = msg === 'no_channel' ? 'no_channel' : msg === 'missing_scope' ? 'missing_scope' : 'failed';
+    const reason = ['no_channel', 'missing_scope', 'no_page'].includes(msg) ? msg : 'failed';
     return back(`error=${reason}&platform=${p}`);
   }
 }

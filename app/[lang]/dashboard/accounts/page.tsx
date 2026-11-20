@@ -13,12 +13,12 @@ const CARDS = [
     fr: 'Publiez vos Shorts et vidéos sur votre chaîne.', en: 'Publish Shorts and videos to your channel.' },
   { id: 'tiktok', name: 'TikTok', icon: '♪', color: 'from-slate-900 to-pink-600', live: true,
     fr: 'Publication directe ou brouillon dans l’appli TikTok.', en: 'Direct post or draft in the TikTok app.' },
-  { id: 'instagram', name: 'Instagram', icon: '◉', color: 'from-fuchsia-600 to-amber-500', live: false,
-    fr: 'Reels — bientôt disponible.', en: 'Reels — coming soon.' },
-  { id: 'facebook', name: 'Facebook', icon: 'f', color: 'from-blue-700 to-blue-500', live: false,
-    fr: 'Pages Facebook — bientôt disponible.', en: 'Facebook Pages — coming soon.' },
-  { id: 'twitter', name: 'X', icon: '✕', color: 'from-zinc-800 to-zinc-600', live: false,
-    fr: 'Bientôt disponible.', en: 'Coming soon.' },
+  { id: 'instagram', name: 'Instagram', icon: '◉', color: 'from-fuchsia-600 to-amber-500', live: true,
+    fr: 'Reels sur votre compte professionnel (créateur ou entreprise).', en: 'Reels on your professional (creator or business) account.' },
+  { id: 'facebook', name: 'Facebook', icon: 'f', color: 'from-blue-700 to-blue-500', live: true,
+    fr: 'Vidéos sur votre Page Facebook.', en: 'Videos on your Facebook Page.' },
+  { id: 'twitter', name: 'X', icon: '✕', color: 'from-zinc-800 to-zinc-600', live: true,
+    fr: 'Posts vidéo sur votre compte X (Twitter).', en: 'Video posts on your X (Twitter) account.' },
 ];
 
 const MESSAGES: Record<string, [string, string]> = {
@@ -29,6 +29,7 @@ const MESSAGES: Record<string, [string, string]> = {
   not_configured: ['Cette connexion n’est pas encore activée sur Synthia. Réessayez bientôt.', 'This connection is not enabled on Synthia yet. Please try again soon.'],
   failed: ['La connexion a échoué. Réessayez.', 'Connection failed. Please retry.'],
   unsupported: ['Réseau non pris en charge.', 'Unsupported network.'],
+  no_page: ['Aucune Page Facebook gérée par ce compte. Créez une Page ou demandez le rôle de créateur de contenu.', 'No Facebook Page managed by this account. Create a Page or ask for a content role.'],
 };
 
 export default function AccountsPage() {
@@ -49,7 +50,8 @@ export default function AccountsPage() {
     const q = new URLSearchParams(window.location.search);
     const connected = q.get('connected');
     const error = q.get('error');
-    if (connected) setNotice({ ok: true, text: fr ? `✓ Compte ${connected === 'youtube' ? 'YouTube' : 'TikTok'} connecté.` : `✓ ${connected === 'youtube' ? 'YouTube' : 'TikTok'} account connected.` });
+    const label = CARDS.find((c) => c.id === connected)?.name ?? connected;
+    if (connected) setNotice({ ok: true, text: fr ? `✓ Compte ${label} connecté.` : `✓ ${label} account connected.` });
     else if (error) setNotice({ ok: false, text: (MESSAGES[error] ?? MESSAGES.failed)[fr ? 0 : 1] });
     if (connected || error) window.history.replaceState(null, '', window.location.pathname);
   }, [load, fr]);
@@ -116,7 +118,7 @@ export default function AccountsPage() {
       <p className="text-xs text-slate-500 mt-8 leading-relaxed">
         {fr ? 'Synthia ne publie que les vidéos que vous choisissez et ne lit ni vos messages ni vos statistiques. Vos accès sont chiffrés. Vous pouvez aussi retirer l’autorisation depuis ' : 'Synthia only posts the videos you choose and never reads your messages or analytics. Your access tokens are encrypted. You can also revoke access from '}
         <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer" className="text-violet-400">Google</a>
-        {fr ? ' ou depuis les réglages de sécurité TikTok. ' : ' or TikTok’s security settings. '}
+        {fr ? ', TikTok, Instagram, Facebook ou X (réglages de sécurité, applis connectées). ' : ', TikTok, Instagram, Facebook or X (security settings, connected apps). '}
         <a href={`/${lang}/privacy`} className="text-violet-400">{fr ? 'Politique de confidentialité' : 'Privacy policy'}</a>
       </p>
     </div>

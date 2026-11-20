@@ -3,6 +3,10 @@ import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { synthesizeLongText } from '@/lib/tts-chunker';
+import { qaScript, qaVoice, QaError, type QaReport } from '@/lib/qa';
+import { applyLexicon } from '@/lib/qa/lexicon';
+import { getProjectAnyUser } from '@/lib/projects';
+
 import { renderVideo } from '@/lib/ffmpeg-studio';
 import { generateImagesFromScript, stabilityEnabled } from '@/lib/stability';
 import { generateWordSRT } from '@/lib/whisper-sync';
@@ -43,10 +47,20 @@ async function runPipeline(params: PipelineParams, jobId: string, outputDir: str
       .catch((e) => console.warn(`[narration] music failed for job ${jobId}:`, e));
   }
 
-  // Voice synthesis
-  const ttsResult = await synthesizeLongText({ text, voiceId, language: lang, outputPath: voiceInitPath, outputDir, jobId });
+  // Quality control step 1: 0 grammar / spelling error before the voice (auto-corrected, else held)
+  let checked: string;
+  try { checked = await qaScript(jobId, text, lang, null); } catch (e) { if (e instanceof QaError) return; throw e; }
+  const spoken = await applyLexicon(userId, lang, checked);
+
+  // Voice synthesis (the voice reads the lexicon spelling; subtitles keep the checked text)
+  const ttsResult = await synthesizeLongText({ text: spoken, voiceId, language: lang, outputPath: voiceInitPath, outputDir, jobId });
   const { duration, outputPath: voicePath } = ttsResult;
   console.log(`[narration] voice done, engine=${ttsResult.engine}, duration=${duration.toFixed(1)}s`);
+
+  // Quality control steps 2-3: 100 % pronunciation (local whisper) and a clear, unsaturated voice — before the render
+  try {
+    await qaVoice(jobId, voicePath, checked, lang, (await getProjectAnyUser(jobId))?.qaReport as QaReport | null);
+  } catch (e) { if (e instanceof QaError) return; throw e; }
 
   // Word-level SRT via Groq Whisper
   let srtPath: string | undefined;
@@ -76,7 +90,7 @@ async function runPipeline(params: PipelineParams, jobId: string, outputDir: str
     voiceoverPath: voicePath,
     imagePaths: finalImagePaths,
     outputPath,
-    subtitleText: !srtPath && text.length <= 8000 ? text : undefined,
+    subtitleText: !srtPath && checked.length <= 8000 ? checked : undefined,
     srtPath,
     duration: Math.ceil(duration),
     musicPath: uploadedMusicPath,  // only use uploaded music immediately (it's already on disk)

@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     const project = await getProject(projectId, user.id);
     if (!project) return notFound();
     if (project.status !== 'ready') return NextResponse.json({ error: 'video not ready' }, { status: 409 });
+    if (!project.approvedAt) return NextResponse.json({ error: 'approval_required', message: 'Approuvez la vidéo avant de la publier. / Approve the video before publishing it.' }, { status: 409 });
     if (project.publishStatus === 'publishing') return NextResponse.json({ success: true, queued: true });
     const list = sanitizePlatforms(platforms);
     if (!list.length) return NextResponse.json({ error: 'platforms are required' }, { status: 400 });

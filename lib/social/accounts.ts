@@ -7,16 +7,20 @@ import pool from '../db';
  * encrypted (AES-256-GCM, key SOCIAL_TOKEN_KEY in /etc/synthia/app.env) and never sent to browsers.
  */
 
-export type ConnectablePlatform = 'youtube' | 'tiktok';
-export const CONNECTABLE: ConnectablePlatform[] = ['youtube', 'tiktok'];
+export type ConnectablePlatform = 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'twitter';
+export const CONNECTABLE: ConnectablePlatform[] = ['youtube', 'tiktok', 'instagram', 'facebook', 'twitter'];
 
 export const APP_URL = (process.env.NEXTAUTH_URL || 'https://synthia.ikelyane.com').replace(/\/$/, '');
 export const redirectUri = (p: ConnectablePlatform) => `${APP_URL}/api/social/callback/${p}`;
 
 /** Whether the platform's developer app credentials are configured on the server. */
 export function platformConfigured(p: ConnectablePlatform): boolean {
-  if (p === 'youtube') return Boolean(process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET);
-  return Boolean(process.env.TIKTOK_CLIENT_KEY && process.env.TIKTOK_CLIENT_SECRET);
+  const e = process.env;
+  if (p === 'youtube') return Boolean(e.YOUTUBE_CLIENT_ID && e.YOUTUBE_CLIENT_SECRET);
+  if (p === 'tiktok') return Boolean(e.TIKTOK_CLIENT_KEY && e.TIKTOK_CLIENT_SECRET);
+  if (p === 'instagram') return Boolean(e.INSTAGRAM_APP_ID && e.INSTAGRAM_APP_SECRET);
+  if (p === 'facebook') return Boolean(e.FACEBOOK_APP_ID && e.FACEBOOK_APP_SECRET);
+  return Boolean(e.X_CLIENT_ID);                       // X: public (PKCE) or confidential client
 }
 
 // ── Encryption ────────────────────────────────────────────────────────────────
@@ -138,6 +142,14 @@ export function makeStateCookie(userId: number, platform: ConnectablePlatform, l
   return { nonce, cookie: `${body}.${hmac(body)}` };
 }
 
+/** PKCE verifier derived from the OAuth nonce (X requires PKCE): nothing extra to store between the two legs. */
+export function pkceVerifier(nonce: string): string {
+  return hmac(`pkce:${nonce}`) + hmac(`pkce2:${nonce}`).slice(0, 20);
+}
+export function pkceChallenge(nonce: string): string {
+  return crypto.createHash('sha256').update(pkceVerifier(nonce)).digest('base64url');
+}
+
 export function readStateCookie(cookie: string | undefined, state: string | null, platform: ConnectablePlatform) {
   if (!cookie || !state) return null;
   const parts = cookie.split('.');
@@ -148,5 +160,5 @@ export function readStateCookie(cookie: string | undefined, state: string | null
   if (sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want))) return null;
   if (p !== platform || Number(exp) < Date.now()) return null;
   if (nonce.length !== state.length || !crypto.timingSafeEqual(Buffer.from(nonce), Buffer.from(state))) return null;
-  return { userId: Number(uid), lang: lang as 'fr' | 'en' };
+  return { userId: Number(uid), lang: lang as 'fr' | 'en', nonce };
 }

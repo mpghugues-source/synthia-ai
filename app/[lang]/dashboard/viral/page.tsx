@@ -164,6 +164,10 @@ function Result({ tool, r, lang }: { tool: Tool; r: AnyObj; lang: Lang }) {
   );
 }
 
+const ENGINE_NAMES: Record<string, string> = {
+  anthropic: 'Claude', openai: 'ChatGPT', gemini: 'Gemini', mistral: 'Mistral', deepseek: 'DeepSeek', xai: 'Grok', groq: 'Groq', openrouter: 'OpenRouter',
+};
+
 export default function ViralLabPage() {
   const params = useParams();
   const lang: Lang = params?.lang === 'en' ? 'en' : 'fr';
@@ -173,6 +177,12 @@ export default function ViralLabPage() {
   const [targetLang, setTargetLang] = useState<string>(lang === 'fr' ? 'en' : 'fr');
   const [platform, setPlatform] = useState('TikTok');
   const [style, setStyle] = useState('punchier');
+  const [engine, setEngine] = useState('synthia');
+  const [engines, setEngines] = useState<{ provider: string; textModel: string | null }[]>([]);
+  useEffect(() => {
+    fetch('/api/integrations').then((r) => (r.ok ? r.json() : null))
+      .then((j) => setEngines((j?.connections ?? []).filter((c: { textModel: string | null }) => c.textModel))).catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<AnyObj | null>(null);
@@ -196,7 +206,7 @@ export default function ViralLabPage() {
     try {
       const res = await fetch('/api/ai/viral', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool, input, lang: outLang, targetLang, platform, style }),
+        body: JSON.stringify({ tool, input, lang: outLang, targetLang, platform, style, engine }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? 'Error');
@@ -233,6 +243,14 @@ export default function ViralLabPage() {
             placeholder={lang === 'fr' ? 'Collez votre script (ou ouvrez une vidéo depuis la Bibliothèque)…' : 'Paste your script (or open a video from the Library)…'} />
         )}
         <div className="flex flex-wrap items-end gap-3 mt-4">
+          <label className="text-xs text-slate-400">
+            {lang === 'fr' ? 'IA qui écrit' : 'AI writer'}
+            <select value={engine} onChange={(e) => setEngine(e.target.value)} className={`${inputCls} mt-1 py-2 w-52`}>
+              <option value="synthia">Synthia (inclus)</option>
+              {engines.map((c) => <option key={c.provider} value={c.provider}>{ENGINE_NAMES[c.provider] ?? c.provider} · {c.textModel}</option>)}
+            </select>
+            {!engines.length && <a href={`/${lang}/dashboard/integrations`} className="block mt-1 text-[11px] text-violet-400">{lang === 'fr' ? '+ Claude, ChatGPT, Gemini…' : '+ Claude, ChatGPT, Gemini…'}</a>}
+          </label>
           <label className="text-xs text-slate-400">
             {tool === 'translate' ? (lang === 'fr' ? 'Traduire vers' : 'Translate to') : (lang === 'fr' ? 'Langue' : 'Language')}
             <select value={tool === 'translate' ? targetLang : outLang}

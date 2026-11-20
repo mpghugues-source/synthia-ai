@@ -1,4 +1,14 @@
 import Groq from 'groq-sdk';
+import { AsyncLocalStorage } from 'async_hooks';
+
+/**
+ * Text engine override for the current request: when a user picks Claude, ChatGPT or Gemini (their own key),
+ * the route runs the Groq helpers inside `withTextEngine(fn, …)` and every JSON call goes to that engine instead.
+ */
+export type JsonEngine = (system: string, user: string, maxTokens: number) => Promise<Record<string, unknown>>;
+const engineStore = new AsyncLocalStorage<JsonEngine>();
+export const withTextEngine = <T>(engine: JsonEngine | null, fn: () => Promise<T>): Promise<T> =>
+  engine ? engineStore.run(engine, fn) : fn();
 
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -40,19 +50,24 @@ export async function generateScriptGroq(params: {
     ` Title and hashtags must also be in ${language}. Exact JSON:\n` +
     `{"title":"short catchy title","script":"narrated text","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5"]}`;
 
-  const completion = await client.chat.completions.create({
-    model: MODEL,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user',   content: userPrompt },
-    ],
-    temperature: 0.7,
-    max_tokens: budget(900),
-    ...REASONING,
-    response_format: { type: 'json_object' },
-  });
-
-  const raw = completion.choices[0]?.message?.content ?? '{}';
+  const engine = engineStore.getStore();
+  let raw: string;
+  if (engine) {
+    raw = JSON.stringify(await engine(systemPrompt, userPrompt, 900));
+  } else {
+    const completion = await client.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: budget(900),
+      ...REASONING,
+      response_format: { type: 'json_object' },
+    });
+    raw = completion.choices[0]?.message?.content ?? '{}';
+  }
   const parsed = JSON.parse(raw);
 
   return {
@@ -67,6 +82,8 @@ export async function generateScriptGroq(params: {
 export type ViralTool = 'hooks' | 'titles' | 'captions' | 'ideas' | 'rewrite' | 'translate' | 'hashtags';
 
 async function askJson(system: string, user: string, maxTokens = 1400, temperature = 0.8): Promise<Record<string, unknown>> {
+  const engine = engineStore.getStore();
+  if (engine) return engine(system, user, maxTokens);
   const completion = await client.chat.completions.create({
     model: MODEL,
     messages: [{ role: 'system', content: system }, { role: 'user', content: user }],

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import LexiconEditor from '@/components/dashboard/LexiconEditor';
 import { PageHeader, inputCls, btnPrimary } from '@/components/dashboard/Shell';
 
 type Lang = 'fr' | 'en';
@@ -122,6 +123,7 @@ export default function BrandPage() {
           </div>
         </div>
       </div>
+      <div className="mt-8"><LexiconEditor lang={lang === 'en' ? 'en' : 'fr'} /></div>
     </div>
   );
 }

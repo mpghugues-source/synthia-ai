@@ -10,6 +10,9 @@ import { generateMusic, type MusicMood } from '@/lib/musicgen';
 import { rateLimit } from '@/lib/rate-limit';
 import { currentUser, unauthorized } from '@/lib/session';
 import { createProject, hasQuota, quotaExceeded } from '@/lib/projects';
+import { qaScript, QaError } from '@/lib/qa';
+import { applyLexicon } from '@/lib/qa/lexicon';
+import { textEngineFor } from '@/lib/ai/providers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -66,11 +69,24 @@ export async function POST(req: NextRequest) {
       : () => generateScript({ topic, niche, duration, platform, lang: lang === 'fr' ? 'fr' : 'en' });
 
     console.log(`[generate-audio] script engine: ${useGroq() ? 'Groq' : 'Ollama'}`);
-    const { script, title, hashtags } = await scriptFn();
+    const draft = await scriptFn();
+    const { title, hashtags } = draft;
     await createProject({
-      id: jobId, userId: user.id, mode: 'ai', title, script, hashtags,
+      id: jobId, userId: user.id, mode: 'ai', title, script: draft.script, hashtags,
       resolution: String(resolution), duration: Number(duration) || 60,
     });
+    // Quality control step 1: grammar, spelling, typography, TTS pitfalls → 0 error before any voice is made.
+    let script: string;
+    try {
+      script = await qaScript(jobId, draft.script, lang, await textEngineFor(user.id, body.engine).catch(() => null));
+    } catch (e) {
+      if (e instanceof QaError) {
+        return NextResponse.json({ error: `Contrôle qualité : ${e.message}. Le script est retenu, relancez la génération. / Quality check: ${e.message}.`, code: 'qa_failed', jobId }, { status: 422 });
+      }
+      throw e;
+    }
+    // The voice reads the lexicon spelling of tricky words; the subtitles keep the real spelling.
+    const spoken = await applyLexicon(user.id, lang, script);
 
     // 2 — TTS: ElevenLabs (sync, fast) → XTTS fallback (async, slow CPU)
     let voicePath  = path.join(outputDir, `voice_${jobId}.mp3`);
@@ -82,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (useElevenLabs()) {
       try {
         console.log('[generate-audio] TTS engine: ElevenLabs');
-        await synthesizeElevenLabs({ text: script, language: lang, voiceId: elevenlabsVoiceId, outputPath: voicePath });
+        await synthesizeElevenLabs({ text: spoken, language: lang, voiceId: elevenlabsVoiceId, outputPath: voicePath });
         voiceReady = true;
         ttsEngine  = 'elevenlabs';
         console.log(`[generate-audio] voice ready: ${voicePath}`);
@@ -98,7 +114,7 @@ export async function POST(req: NextRequest) {
       // XTTS — fire-and-forget (CPU takes 10-30 min)
       console.log('[generate-audio] TTS engine: XTTS (async)');
       const _voicePath = voicePath;
-      synthesizeAndSave({ text: script, speakerWavPath, language: lang }, _voicePath)
+      synthesizeAndSave({ text: spoken, speakerWavPath, language: lang }, _voicePath)
         .then(() => console.log(`[generate-audio] voice ready (XTTS): ${_voicePath}`))
         .catch((e: unknown) => console.error('[generate-audio] xtts failed:', e));
     }

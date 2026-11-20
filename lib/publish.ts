@@ -5,11 +5,15 @@ import { updateProject, getBrandKit, type Project } from './projects';
 import { getAccount } from './social/accounts';
 import { youtubePublish, type YoutubePrivacy } from './social/youtube';
 import { tiktokPublish, type TiktokOptions } from './social/tiktok';
+import { instagramPublish } from './social/instagram';
+import { facebookPublish } from './social/facebook';
+import { xPublish } from './social/x';
+import { CONNECTABLE } from './social/accounts';
 
 export type SocialPlatform = 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'twitter';
 const ALL: SocialPlatform[] = ['youtube', 'tiktok', 'instagram', 'facebook', 'twitter'];
-/** Platforms users can connect today (the others are announced as coming soon). */
-export const LIVE_PLATFORMS: SocialPlatform[] = ['youtube', 'tiktok'];
+/** Platforms users can connect. */
+export const LIVE_PLATFORMS: SocialPlatform[] = ['youtube', 'tiktok', 'instagram', 'facebook', 'twitter'];
 
 export interface PublishOptions {
   caption?: string;                       // overrides title/description text
@@ -46,13 +50,19 @@ export function sanitizeOptions(raw: unknown): PublishOptions {
 
 /** Which platforms the user has connected (used by the Studio and the calendar). */
 export async function connectedPlatforms(userId: number): Promise<Record<SocialPlatform, boolean>> {
-  const [yt, tk] = await Promise.all([getAccount(userId, 'youtube').catch(() => null), getAccount(userId, 'tiktok').catch(() => null)]);
-  return { youtube: Boolean(yt), tiktok: Boolean(tk), instagram: false, facebook: false, twitter: false };
+  const found = await Promise.all(CONNECTABLE.map((p) => getAccount(userId, p).catch(() => null)));
+  return Object.fromEntries(CONNECTABLE.map((p, i) => [p, Boolean(found[i])])) as Record<SocialPlatform, boolean>;
 }
 
 /** Publish a ready project on the user's own connected accounts and record the results. */
 export async function publishProject(project: Project, platforms: SocialPlatform[], options: PublishOptions = {}): Promise<PublishResult[]> {
   if (project.status !== 'ready' || !project.outputFile) throw new Error('Video not ready');
+  // The creator's rule: nothing is published before they approved this exact render (approval is reset by any re-render).
+  if (!project.approvedAt || !['passed', 'manual'].includes(project.qaStatus ?? '')) {
+    const results: PublishResult[] = platforms.map((platform) => ({ platform, success: false, error: project.approvedAt ? 'qa_failed' : 'approval_required' }));
+    await updateProject(project.id, { publishStatus: 'failed', publishResults: results });
+    return results;
+  }
   const videoPath = path.join(OUTPUT_DIR, path.basename(project.outputFile));
   if (!fs.existsSync(videoPath)) throw new Error('Video file missing');
 
@@ -72,8 +82,17 @@ export async function publishProject(project: Project, platforms: SocialPlatform
     } else if (platform === 'tiktok') {
       const caption = (options.caption ?? `${project.title ?? ''} ${tags.slice(0, 6).join(' ')}`).trim();
       r = await tiktokPublish(project.userId, { videoPath, caption, options: options.tiktok ?? { mode: 'draft' } });
+    } else if (platform === 'instagram') {
+      const caption = (options.caption ?? `${project.title ?? ''}\n\n${description}`).trim();
+      r = await instagramPublish(project.userId, { projectId: project.id, caption: `${caption}\n\n${tags.slice(0, 20).join(' ')}`.trim() });
+    } else if (platform === 'facebook') {
+      r = await facebookPublish(project.userId, { projectId: project.id, title: project.title ?? 'Synthia',
+        description: `${description}\n\n${tags.join(' ')}`.trim() });
     } else {
-      r = { success: false, error: 'coming_soon' };
+      const base = (options.caption ?? project.title ?? '').trim();
+      const tagStr = tags.slice(0, 3).join(' ');
+      const text = base.length + tagStr.length + 1 <= 280 ? `${base} ${tagStr}`.trim() : base.slice(0, 279);
+      r = await xPublish(project.userId, { videoPath, text });
     }
     results.push({ platform, ...r });
   }
