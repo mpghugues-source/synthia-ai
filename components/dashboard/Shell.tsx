@@ -19,6 +19,7 @@ const NAV = [
   { href: '/library', icon: '🎞️', fr: 'Bibliothèque', en: 'Library' },
   { href: '/calendar', icon: '🗓️', fr: 'Calendrier', en: 'Calendar' },
   { href: '/accounts', icon: '🔗', fr: 'Comptes connectés', en: 'Connected accounts' },
+  { href: '/integrations', icon: '🤖', fr: 'Connexions IA', en: 'AI connections' },
   { href: '/brand', icon: '🎨', fr: 'Brand kit', en: 'Brand kit' },
   { href: '/account', icon: '💎', fr: 'Abonnement', en: 'Plan & billing' },
 ];
@@ -40,6 +41,47 @@ export function useMe() {
     return () => { alive = false; clearInterval(t); };
   }, []);
   return me;
+}
+
+interface Draft { id: string; title: string | null; mode: string; updatedAt: string }
+
+/** "Recent": the user's projects that stay (autosaved Studio work), like conversations in an AI chat app. */
+function Recents({ lang, base }: { lang: Lang; base: string }) {
+  const [drafts, setDrafts] = useState<Draft[] | null>(null);
+  const [current, setCurrent] = useState<string | null>(null);
+  useEffect(() => {
+    const load = () => fetch('/api/drafts?limit=12').then((r) => (r.ok ? r.json() : null)).then((j) => setDrafts(j?.drafts ?? [])).catch(() => {});
+    load();
+    setCurrent(new URLSearchParams(window.location.search).get('draft'));
+    window.addEventListener('synthia:drafts', load);
+    return () => window.removeEventListener('synthia:drafts', load);
+  }, []);
+  const remove = async (id: string) => {
+    if (!confirm(lang === 'fr' ? 'Supprimer ce projet de la liste ? (les vidéos déjà créées restent dans la Bibliothèque)' : 'Remove this project from the list? (videos already made stay in the Library)')) return;
+    await fetch(`/api/drafts/${id}`, { method: 'DELETE' });
+    setDrafts((d) => (d ?? []).filter((x) => x.id !== id));
+  };
+  const icon: Record<string, string> = { ai: '✨', manual: '🎬', narration: '🎙️' };
+  return (
+    <div className="mt-4 min-h-0 flex flex-col">
+      <div className="flex items-center justify-between px-3 mb-1">
+        <span className="text-[11px] uppercase tracking-wider text-slate-500">{lang === 'fr' ? 'Récents' : 'Recent'}</span>
+        <a href={base} className="text-[11px] text-violet-400 hover:text-violet-300">＋ {lang === 'fr' ? 'Nouveau' : 'New'}</a>
+      </div>
+      <div className="overflow-y-auto max-h-56 space-y-0.5 pr-1">
+        {drafts === null ? <div className="h-6 mx-3 rounded bg-white/5 animate-pulse" /> : drafts.length === 0 ? (
+          <p className="px-3 text-[11px] text-slate-600">{lang === 'fr' ? 'Vos projets apparaîtront ici et resteront disponibles.' : 'Your projects will appear here and stay available.'}</p>
+        ) : drafts.map((d) => (
+          <div key={d.id} className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${current === d.id ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+            <a href={`${base}?draft=${d.id}`} className="flex-1 min-w-0 truncate" title={d.title ?? ''}>
+              {icon[d.mode] ?? '✨'} {d.title || (lang === 'fr' ? 'Sans titre' : 'Untitled')}
+            </a>
+            <button onClick={() => remove(d.id)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-300" aria-label="delete">×</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function UsageMeter({ me, lang }: { me: MeData | null; lang: Lang }) {
@@ -86,7 +128,7 @@ export default function Shell({ lang, children }: { lang: Lang; children: React.
           <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-black shadow-lg shadow-violet-900/40">S</span>
           <span className="font-bold text-lg text-white tracking-tight">Synthia <span className="text-gradient">AI</span></span>
         </a>
-        <nav className="space-y-1 flex-1">
+        <nav className="space-y-1">
           {NAV.map((n) => (
             <a key={n.href} href={`${base}${n.href}`}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
@@ -101,7 +143,9 @@ export default function Shell({ lang, children }: { lang: Lang; children: React.
             </a>
           ))}
         </nav>
-        <div className="mb-3"><InstallApp lang={lang} /></div>
+        <Recents lang={lang} base={base} />
+        <div className="flex-1" />
+        <div className="mb-3 mt-3"><InstallApp lang={lang} /></div>
         <UsageMeter me={me} lang={lang} />
         <div className="mt-4 flex items-center gap-2 px-1">
           <span className="w-8 h-8 rounded-full bg-[#2A2A45] flex items-center justify-center text-xs font-bold text-white uppercase">{name.slice(0, 1)}</span>

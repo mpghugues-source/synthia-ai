@@ -1,7 +1,7 @@
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import pool from './db';
 
-export type ProjectMode = 'ai' | 'manual' | 'narration';
+export type ProjectMode = 'ai' | 'manual' | 'narration' | 'import' | 'generated';
 export type ProjectStatus = 'draft' | 'rendering' | 'ready' | 'failed';
 export type PublishStatus = 'none' | 'scheduled' | 'publishing' | 'published' | 'failed';
 
@@ -24,6 +24,10 @@ export interface Project {
   publishStatus: PublishStatus;
   publishResults: unknown;
   publishOptions: unknown;
+  source: string | null;
+  qaStatus: string | null;
+  qaReport: unknown;
+  approvedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,7 +37,7 @@ interface ProjectRow extends RowDataPacket {
   hashtags: string | null; status: ProjectStatus; output_file: string | null; thumb_file: string | null;
   duration: number | null; resolution: string | null; file_size: number | null; error: string | null;
   platforms: string | null; scheduled_at: Date | null; publish_status: PublishStatus;
-  publish_results: string | null; publish_options: string | null; created_at: Date; updated_at: Date;
+  publish_results: string | null; publish_options: string | null; source?: string | null; qa_status?: string | null; qa_report?: string | null; approved_at?: Date | null; created_at: Date; updated_at: Date;
 }
 
 function parseJson<T>(raw: string | null, fallback: T): T {
@@ -50,14 +54,16 @@ function toProject(r: ProjectRow): Project {
     error: r.error, platforms: parseJson<string[]>(r.platforms, []),
     scheduledAt: r.scheduled_at ? new Date(r.scheduled_at).toISOString() : null,
     publishStatus: r.publish_status, publishResults: parseJson<unknown>(r.publish_results, null),
-    publishOptions: parseJson<unknown>(r.publish_options, null),
+    publishOptions: parseJson<unknown>(r.publish_options, null), source: r.source ?? null,
+    qaStatus: r.qa_status ?? null, qaReport: parseJson<unknown>(r.qa_report ?? null, null),
+    approvedAt: r.approved_at ? new Date(r.approved_at).toISOString() : null,
     createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(),
   };
 }
 
 export async function createProject(p: {
   id: string; userId: number; mode: ProjectMode; title?: string | null; script?: string | null;
-  hashtags?: string[]; resolution?: string; duration?: number;
+  hashtags?: string[]; resolution?: string; duration?: number; source?: string | null;
 }): Promise<void> {
   await pool.query(
     `INSERT INTO projects (id, user_id, mode, title, script, hashtags, resolution, duration)
@@ -66,6 +72,8 @@ export async function createProject(p: {
     [p.id, p.userId, p.mode, p.title ?? null, p.script ?? null, JSON.stringify(p.hashtags ?? []),
      p.resolution ?? null, p.duration ?? null],
   );
+  // separate statement: works before and after migration 003 (column `source`)
+  if (p.source) await pool.query('UPDATE projects SET source = ? WHERE id = ?', [p.source.slice(0, 40), p.id]);
 }
 
 /** The project if it exists AND belongs to userId. */
@@ -85,8 +93,9 @@ const COLUMN: Record<string, string> = {
   outputFile: 'output_file', thumbFile: 'thumb_file', duration: 'duration', resolution: 'resolution',
   fileSize: 'file_size', error: 'error', platforms: 'platforms', scheduledAt: 'scheduled_at',
   publishStatus: 'publish_status', publishResults: 'publish_results', publishOptions: 'publish_options',
+  source: 'source', qaStatus: 'qa_status', qaReport: 'qa_report', approvedAt: 'approved_at',
 };
-const JSON_FIELDS = new Set(['hashtags', 'platforms', 'publishResults', 'publishOptions']);
+const JSON_FIELDS = new Set(['hashtags', 'platforms', 'publishResults', 'publishOptions', 'qaReport']);
 
 export async function updateProject(id: string, fields: Partial<Omit<Project, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<void> {
   const sets: string[] = [];
@@ -96,7 +105,7 @@ export async function updateProject(id: string, fields: Partial<Omit<Project, 'i
     if (!col || v === undefined) continue;
     sets.push(`${col} = ?`);
     if (JSON_FIELDS.has(k)) values.push(v === null ? null : JSON.stringify(v));
-    else if (k === 'scheduledAt') values.push(v ? new Date(v as string) : null);
+    else if (k === 'scheduledAt' || k === 'approvedAt') values.push(v ? new Date(v as string) : null);
     else values.push(v);
   }
   if (!sets.length) return;

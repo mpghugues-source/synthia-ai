@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
         duration: dur, musicVolume: Math.min(Math.max(Number(musicVolume) || 0.2, 0), 1),
         resolution: res as typeof RESOLUTIONS[number], captionStyle: style,
       },
-      meta: { title, script, hashtags, duration: dur, mode: project.mode },
+      meta: { title, script, hashtags, duration: dur, mode: project.mode,
+        lang: typeof body.lang === 'string' && /^[a-z]{2}$/.test(body.lang) ? body.lang : undefined },
     });
 
     return NextResponse.json({ success: true, queued: true, data: { jobId } });

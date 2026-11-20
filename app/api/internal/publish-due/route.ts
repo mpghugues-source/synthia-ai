@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isInternalRequest } from '@/lib/session';
 import { dueScheduledProjects, updateProject } from '@/lib/projects';
 import { publishProject, sanitizePlatforms, sanitizeOptions } from '@/lib/publish';
+import { resumeGenerations } from '@/lib/ai/video-jobs';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -9,6 +10,7 @@ export const maxDuration = 300;
 /** Called every minute by cron.js: publishes the scheduled projects whose time has come. */
 export async function POST(req: NextRequest) {
   if (!isInternalRequest(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  await resumeGenerations().catch(() => {});          // AI videos interrupted by a restart
   const due = await dueScheduledProjects();
   const done: { id: string; ok: boolean }[] = [];
   for (const p of due) {

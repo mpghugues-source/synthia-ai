@@ -48,6 +48,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (Number.isNaN(at.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 });
     if (!platforms.length) return NextResponse.json({ error: 'platforms are required' }, { status: 400 });
     if (r.project.status !== 'ready') return NextResponse.json({ error: 'video not ready' }, { status: 409 });
+    if (!r.project.approvedAt) return NextResponse.json({ error: 'approval_required', message: 'Approuvez la vidéo avant de la programmer. / Approve the video before scheduling it.' }, { status: 409 });
     fields.scheduledAt = at.toISOString();
     fields.platforms = platforms;
     fields.publishOptions = sanitizeOptions(body.schedule.options);

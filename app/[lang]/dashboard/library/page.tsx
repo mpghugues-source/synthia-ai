@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { PageHeader, btnGhost, btnPrimary, inputCls } from '@/components/dashboard/Shell';
 import type { ProjectDto } from '@/components/dashboard/types';
+import QaApproval from '@/components/dashboard/QaApproval';
 
 type Lang = 'fr' | 'en';
 
@@ -40,6 +41,27 @@ function fmtDur(s: number | null) {
   if (!s) return '';
   const m = Math.floor(s / 60);
   return m ? `${m}:${String(s % 60).padStart(2, '0')}` : `${s}s`;
+}
+
+/** Projects in progress (autosaved Studio work): visible here too, so they stay reachable on mobile. */
+function InProgress({ lang }: { lang: 'fr' | 'en' }) {
+  const [drafts, setDrafts] = useState<{ id: string; title: string | null; mode: string; updatedAt: string }[]>([]);
+  useEffect(() => { fetch('/api/drafts?limit=8').then((r) => (r.ok ? r.json() : null)).then((j) => setDrafts(j?.drafts ?? [])).catch(() => {}); }, []);
+  if (!drafts.length) return null;
+  return (
+    <div className="mb-6">
+      <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">{lang === 'fr' ? 'Projets en cours — reprenez où vous en étiez' : 'Projects in progress — pick up where you left off'}</div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {drafts.map((d) => (
+          <a key={d.id} href={`/${lang}/dashboard?draft=${d.id}`}
+            className="shrink-0 w-56 rounded-2xl border border-[#2A2A45] bg-[#13132A] p-3 hover:border-violet-500 transition-all">
+            <div className="text-sm text-white truncate">{d.title || (lang === 'fr' ? 'Sans titre' : 'Untitled')}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{new Date(d.updatedAt).toLocaleString(lang)}</div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function LibraryPage() {
@@ -87,6 +109,8 @@ export default function LibraryPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <PageHeader title={t.title} subtitle={t.sub}
         action={<a href={`/${lang}/dashboard`} className={btnPrimary}>{t.new}</a>} />
+
+      <InProgress lang={lang === 'en' ? 'en' : 'fr'} />
 
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {(['all', 'ready', 'rendering', 'scheduled', 'failed'] as const).map((f) => (
@@ -178,7 +202,8 @@ export default function LibraryPage() {
               <button onClick={() => setPlaying(null)} className="text-slate-300 hover:text-white text-2xl leading-none">×</button>
             </div>
             <video src={`/api/media/stream/${playing.outputFile}`} controls autoPlay playsInline
-              className="w-full max-h-[78vh] rounded-2xl bg-black" />
+              className="w-full max-h-[60vh] rounded-2xl bg-black" />
+            <div className="mt-3 max-h-[30vh] overflow-y-auto"><QaApproval projectId={playing.id} lang={lang === 'en' ? 'en' : 'fr'} /></div>
             {playing.hashtags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {playing.hashtags.map((h) => <span key={h} className="text-xs px-2 py-0.5 rounded bg-violet-500/20 text-violet-200">{h.startsWith('#') ? h : `#${h}`}</span>)}

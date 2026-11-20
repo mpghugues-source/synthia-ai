@@ -6,8 +6,8 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://checkout.flutterwave.com",
   "style-src 'self' 'unsafe-inline'",
-  // Profile pictures of connected YouTube/TikTok accounts.
-  "img-src 'self' data: blob: https://*.ggpht.com https://*.googleusercontent.com https://*.tiktokcdn.com https://*.tiktokcdn-us.com https://*.tiktokcdn-eu.com",
+  // Profile pictures of connected YouTube/TikTok/Instagram/Facebook/X accounts.
+  "img-src 'self' data: blob: https://*.ggpht.com https://*.googleusercontent.com https://*.tiktokcdn.com https://*.tiktokcdn-us.com https://*.tiktokcdn-eu.com https://*.cdninstagram.com https://*.fbcdn.net https://platform-lookaside.fbsbx.com https://pbs.twimg.com",
   "font-src 'self' data:",
   "media-src 'self' blob:",
   "connect-src 'self' https://api.flutterwave.com",
@@ -41,6 +41,9 @@ const nextConfig = {
   ],
   // No remote images: the optimizer must not fetch arbitrary URLs for third parties.
   images: { remotePatterns: [] },
+  // Uploads go through proxy.ts, which buffers the body: the default 10 MB cut every larger video upload.
+  // Cloudflare caps request bodies at 100 MB anyway.
+  experimental: { proxyClientMaxBodySize: '110mb' },
   async headers() {
     return [
       { source: '/:path*', headers: SECURITY_HEADERS },

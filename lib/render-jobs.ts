@@ -2,7 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import { renderVideo, extractThumbnail, type RenderOptions } from './ffmpeg-studio';
 import { OUTPUT_DIR } from './paths';
-import { updateProject, countRender, getBrandKit } from './projects';
+import { updateProject, countRender, getBrandKit, getProjectAnyUser } from './projects';
+import { qaVoice, qaFinal, QaError, type QaReport } from './qa';
 
 /**
  * Renders run in the background of the app process: an HTTP request through Cloudflare is cut
@@ -41,15 +42,33 @@ export async function finalizeRender(projectId: string, userId: number, finalPat
     ...(typeof extra.duration === 'number' ? { duration: Math.round(extra.duration) } : {}),
   });
   await countRender(projectId, userId);
+  // Step 4 of the quality control; the video then waits for the creator's approval before any publication.
+  const p = await getProjectAnyUser(projectId);
+  await qaFinal(projectId, finalPath, (p?.qaReport as QaReport | null) ?? null).catch(async (e) => {
+    console.error(`[qa final ${projectId}]`, e);
+    await updateProject(projectId, { qaStatus: 'failed', approvedAt: null }).catch(() => {});
+  });
 }
 
 export function startRender(job: RenderJob): void {
   const outputPath = path.join(OUTPUT_DIR, `render_${job.projectId}.mp4`);
   void (async () => {
-    await updateProject(job.projectId, { status: 'rendering', error: null });
+    await updateProject(job.projectId, { status: 'rendering', error: null, approvedAt: null, qaStatus: 'running' });
     const release = await slot();
     try {
       const brand = await getBrandKit(job.userId);
+      // Steps 2-3 of the quality control: pronunciation (whisper, 100 %) and clear voice, BEFORE the render.
+      const script = job.options.subtitleText;
+      if (job.options.voiceoverPath && script && script.trim()) {
+        const lang = typeof job.meta?.lang === 'string' ? job.meta.lang : brand.defaultLang;
+        const prev = (await getProjectAnyUser(job.projectId))?.qaReport as QaReport | null;
+        try {
+          await qaVoice(job.projectId, job.options.voiceoverPath, script, lang, prev);
+        } catch (e) {
+          if (e instanceof QaError) return;                 // video held, report saved
+          throw e;
+        }
+      }
       const finalPath = await renderVideo({
         ...job.options,
         outputPath,

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import PublishPanel, { publishErrorText, type PublishSelection } from '@/components/dashboard/PublishPanel';
+import QaApproval from '@/components/dashboard/QaApproval';
 
 type Lang       = 'fr' | 'en';
 type Step       = 'script' | 'audio' | 'video' | 'publish';
@@ -719,6 +720,78 @@ export default function DashboardPage() {
   const [aiImgStatus,     setAiImgStatus]     = useState<JobStatus>('idle');
   const [aiImgError,      setAiImgError]      = useState('');
 
+  // ── Projects that stay (autosave + resume, like a conversation in Claude / ChatGPT / Gemini) ──────────
+  const draftIdRef = useRef<string | null>(null);
+  const restoringRef = useRef(true);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const draftState = {
+    mode, topic, scriptLang, captionStyle, templateId, duration, mood, bpm, resolution, step,
+    data: { jobId: data.jobId, title: data.title, script: data.script, hashtags: data.hashtags, voicePath: data.voicePath,
+      musicPath: data.musicPath, outputPath: data.outputPath, voiceReady: data.voiceReady, duration: data.duration, imagePaths: data.imagePaths },
+    manualTitle, manualScript, manualDuration, manualResolution, manualMood,
+    narrTitle, narrText, narrResolution, narrImageStyle, narrImageCount,
+  };
+  const draftTitle = (mode === 'ai' ? data.title || topic : mode === 'manual' ? manualTitle || manualScript : narrTitle || narrText).slice(0, 120);
+  const draftJson = JSON.stringify(draftState);
+
+  // Resume: /dashboard?draft=<id>
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('draft');
+    if (!id) { restoringRef.current = false; return; }
+    fetch(`/api/drafts/${id}`).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      const st = j?.draft?.state as Partial<typeof draftState> | undefined;
+      if (st) {
+        draftIdRef.current = j.draft.id;
+        if (st.mode) setMode(st.mode);
+        if (typeof st.topic === 'string') setTopic(st.topic);
+        if (st.scriptLang) setScriptLang(st.scriptLang);
+        if (st.captionStyle) setCaptionStyle(st.captionStyle);
+        if (typeof st.templateId === 'string') setTemplateId(st.templateId);
+        if (st.duration) setDuration(st.duration);
+        if (st.mood) setMood(st.mood);
+        if (st.bpm) setBpm(st.bpm);
+        if (st.resolution) setResolution(st.resolution);
+        if (st.data) setData(st.data as GeneratedData);
+        if (st.step) setStep(st.step);
+        if (typeof st.manualTitle === 'string') setManualTitle(st.manualTitle);
+        if (typeof st.manualScript === 'string') setManualScript(st.manualScript);
+        if (st.manualDuration) setManualDuration(st.manualDuration);
+        if (st.manualResolution) setManualResolution(st.manualResolution);
+        if (st.manualMood) setManualMood(st.manualMood);
+        if (typeof st.narrTitle === 'string') setNarrTitle(st.narrTitle);
+        if (typeof st.narrText === 'string') setNarrText(st.narrText);
+        if (st.narrResolution) setNarrResolution(st.narrResolution);
+        if (typeof st.narrImageStyle === 'string') setNarrImageStyle(st.narrImageStyle);
+        if (st.narrImageCount) setNarrImageCount(st.narrImageCount);
+        setSavedAt(j.draft.updatedAt);
+      }
+    }).catch(() => {}).finally(() => { setTimeout(() => { restoringRef.current = false; }, 500); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave 1.5 s after the last change, once there is something worth keeping.
+  useEffect(() => {
+    if (restoringRef.current) return;
+    const hasContent = Boolean(topic.trim() || data.script || manualScript.trim() || manualTitle.trim() || narrText.trim() || narrTitle.trim());
+    if (!hasContent) return;
+    const t = setTimeout(async () => {
+      const r = await fetch('/api/drafts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: draftIdRef.current, title: draftTitle, mode, state: draftState, projectId: data.jobId ?? narrJobId ?? undefined }) })
+        .then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (r?.id) {
+        if (!draftIdRef.current) {
+          draftIdRef.current = r.id;
+          const url = new URL(window.location.href); url.searchParams.set('draft', r.id);
+          window.history.replaceState(null, '', url.toString());
+          window.dispatchEvent(new Event('synthia:drafts'));
+        }
+        setSavedAt(new Date().toISOString());
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftJson]);
+
   // ── Poll voice status (AI mode) ───────────────────────────────────────────────
   useEffect(() => {
     if (!data.jobId || data.voiceReady) return;
@@ -860,7 +933,7 @@ export default function DashboardPage() {
           jobId: data.jobId, voicePath: data.voicePath, musicPath: data.musicPath,
           title: data.title, script: data.script, hashtags: data.hashtags,
           imagePaths: aiImages.length > 0 ? aiImages : undefined,
-          duration, resolution, captionStyle,
+          duration, resolution, captionStyle, lang: scriptLang,
         }),
       });
       await apiJson(res);
@@ -943,7 +1016,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           jobId, voicePath, imagePaths, clipPaths,
           title: manualTitle, script, hashtags: [],
-          duration: manualDuration, resolution: manualResolution, captionStyle,
+          duration: manualDuration, resolution: manualResolution, captionStyle, lang: scriptLang,
         }),
       });
       await apiJson(renderRes);
@@ -1022,7 +1095,13 @@ export default function DashboardPage() {
     <div className="text-slate-200">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">{u.title}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">{u.title}</h1>
+            {savedAt && <span className="text-[11px] text-green-400/80">✓ {lang === 'fr' ? 'Projet enregistré' : 'Project saved'} · {new Date(savedAt).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}</span>}
+            <a href={`/${lang}/dashboard`} className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-[#2A2A45] text-slate-300 hover:border-violet-500 hover:text-white">
+              ＋ {lang === 'fr' ? 'Nouveau projet' : 'New project'}
+            </a>
+          </div>
           <p className="text-slate-400 text-sm mt-1">{lang === 'fr'
             ? 'Du sujet à la vidéo publiée : script, voix, musique, sous-titres et montage automatiques.'
             : 'From topic to published video: script, voice, music, captions and editing on autopilot.'}</p>
@@ -1289,6 +1368,7 @@ export default function DashboardPage() {
                 {data.outputPath && (
                   <VideoPlayer outputPath={data.outputPath} label={u.video_ready} lang={lang} resolution={resolution} />
                 )}
+                {data.outputPath && data.jobId && <QaApproval projectId={data.jobId} lang={lang} />}
                 {isLoading && (
                   <div className="glow-card rounded-2xl p-8 flex flex-col items-center gap-3">
                     <div className="w-10 h-10 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
@@ -1404,6 +1484,7 @@ export default function DashboardPage() {
               {manualStep === 'done' && manualData.outputPath && (
                 <>
                   <VideoPlayer outputPath={manualData.outputPath} label={u.video_ready} lang={lang} resolution={manualResolution} />
+                  {manualData.jobId && <QaApproval projectId={manualData.jobId} lang={lang} />}
                   <button onClick={() => { setManualStep('upload'); setManualData({}); setManualStatus('idle'); setVoiceFile(null); setImageFiles([]); setClipFiles([]); }}
                     className="w-full py-3 rounded-xl border border-[#2A2A45] text-slate-400 hover:border-violet-500 hover:text-white text-sm transition-all">
                     {lang === 'fr' ? '+ Nouvelle vidéo' : '+ New video'}
@@ -1625,6 +1706,7 @@ export default function DashboardPage() {
               {narrStatus === 'done' && narrData.outputPath && (
                 <>
                   <VideoPlayer outputPath={narrData.outputPath} label={u.video_ready} lang={lang} resolution={narrResolution} />
+                  {narrData.jobId && <QaApproval projectId={narrData.jobId} lang={lang} />}
                   <div className="glow-card rounded-2xl p-4 space-y-2">
                     {narrData.duration && (
                       <div className="flex items-center gap-3">
